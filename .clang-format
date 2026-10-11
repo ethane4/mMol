@@ -1,0 +1,9 @@
+---
+# Google C++ style (https://google.github.io/styleguide/cppguide.html).
+# Include order is significant in this codebase, so includes are not sorted.
+BasedOnStyle: Google
+SortIncludes: Never
+---
+Language: ObjC
+BasedOnStyle: Google
+SortIncludes: Never

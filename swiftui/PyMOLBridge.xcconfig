@@ -1,0 +1,54 @@
+// PyMOLBridge.xcconfig — Build settings for PyMOL SwiftUI app
+//
+// Include paths go via OTHER_CPLUSPLUSFLAGS (not HEADER_SEARCH_PATHS), so
+// they stay out of Clang module builds for CoreFoundation/AppKit.
+
+PYMOL_ROOT = $(SRCROOT)/..
+
+// External package-manager prefix (Homebrew by default). For MacPorts or a
+// custom prefix, create PyMOLBridge.local.xcconfig (gitignored, not checked
+// in) next to this file with e.g.:
+//   PYMOL_EXTERNAL_PREFIX = /opt/local
+//   PYMOL_LIBOMP_STATIC = -L/opt/local/lib/libomp -lomp
+//
+// PYMOL_LIBOMP_STATIC does NOT derive correctly from PYMOL_EXTERNAL_PREFIX
+// alone — Homebrew's keg layout ships a static libomp.a under opt/libomp/lib,
+// while MacPorts ships only a dynamic libomp.dylib under lib/libomp, a
+// structurally different layout, not just a different prefix. Anyone setting
+// PYMOL_EXTERNAL_PREFIX to a non-Homebrew prefix MUST also override
+// PYMOL_LIBOMP_STATIC explicitly (it can hold a full "-L... -lomp" flag pair
+// instead of a bare path, e.g. "-L/opt/local/lib/libomp -lomp").
+PYMOL_EXTERNAL_PREFIX = /opt/homebrew
+PYMOL_LIBOMP_STATIC = $(PYMOL_EXTERNAL_PREFIX)/opt/libomp/lib/libomp.a
+#include? "PyMOLBridge.local.xcconfig"
+
+// --- Library search paths ---
+// The embedded standalone Python 3.13; /opt/homebrew/lib only supplies
+// freetype/png at LINK time. (libpymol_core.a / libchamp.a are target products.)
+LIBRARY_SEARCH_PATHS[sdk=macosx*] = $(SRCROOT)/../deps_macos/python-standalone/python/lib $(PYMOL_EXTERNAL_PREFIX)/lib
+
+// Embedded Python lives in the .app's Contents/Resources/python; the app must
+// resolve @rpath/libpython3.13.dylib there at runtime.
+LD_RUNPATH_SEARCH_PATHS[sdk=macosx*] = $(inherited) @executable_path/../Resources/python/lib
+
+// --- C++/ObjC++ include paths ---
+PYMOL_INCLUDE_FLAGS_COMMON = -I$(PYMOL_ROOT)/src -I$(PYMOL_ROOT)/third_party -I$(PYMOL_ROOT)/third_party/pocketfft -I$(PYMOL_EXTERNAL_PREFIX)/include
+
+// Python headers: the embedded standalone Python 3.13
+PYMOL_PYTHON_INC[sdk=macosx*] = -I$(SRCROOT)/../deps_macos/python-standalone/python/include/python3.13
+
+PYMOL_INCLUDE_FLAGS = $(PYMOL_INCLUDE_FLAGS_COMMON) $(PYMOL_PYTHON_INC)
+
+OTHER_CPLUSPLUSFLAGS = $(inherited) $(PYMOL_INCLUDE_FLAGS)
+
+// --- Linker flags ---
+// Frameworks the core uses.
+PYMOL_CORE_LDFLAGS = -framework Metal -framework MetalKit -framework CoreVideo
+
+// Full dependency set. libomp.a is linked STATICALLY (by absolute path, so the
+// linker uses the archive, not the .dylib) to resolve the OpenMP symbols from
+// pymol_core's parallel surface sampling — no dylib to bundle/sign, so the app
+// stays self-contained.
+PYMOL_PLATFORM_LDFLAGS[sdk=macosx*] = -lfreetype -lpng16 -lz -lpython3.13 $(PYMOL_LIBOMP_STATIC)
+
+OTHER_LDFLAGS = $(inherited) $(PYMOL_CORE_LDFLAGS) $(PYMOL_PLATFORM_LDFLAGS)

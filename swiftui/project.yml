@@ -1,0 +1,318 @@
+name: PyMOLViewer
+options:
+  bundleIdPrefix: com.mmol
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+configFiles:
+  Debug: PyMOLBridge.xcconfig
+  Release: PyMOLBridge.xcconfig
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CLANG_CXX_LANGUAGE_STANDARD: c++17
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_OBJC_BRIDGING_HEADER: PyMOLViewer/Bridge/PyMOLBridge.h
+    # Do NOT add PyMOL include paths to HEADER_SEARCH_PATHS: they would join
+    # Clang module builds of the system frameworks.
+    # All paths/flags (incl. per-SDK LIBRARY_SEARCH_PATHS) live in
+    # PyMOLBridge.xcconfig, which links build_macos_swiftui + the embedded
+    # standalone Python 3.13 (no Homebrew/python@3.14). Do NOT set
+    # LIBRARY_SEARCH_PATHS here — a target-level value would override the
+    # xcconfig's paths.
+
+packages:
+  # Terminal emulator for the in-app Claude tab (ClaudeTerminal.swift). MIT.
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    from: 1.9.0
+
+schemes:
+  # Standalone macOS unit-test scheme so `xcodebuild test -scheme UnitTests_macOS`
+  # only builds + runs PyMOLViewerTests.
+  UnitTests_macOS:
+    build:
+      targets:
+        PyMOLViewer_macOS: [test, build]
+        PyMOLViewerTests: [test, build]
+    test:
+      targets:
+        - PyMOLViewerTests
+      gatherCoverageData: false
+
+targets:
+  # The PyMOL core (C/C++ layers, VMD file readers, Metal renderer) as a static
+  # library, compiled -O2 for Metal only (no OpenGL), as PyMOL's own build did.
+  pymol_core:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ../src
+        includes: ["**/*.cc", "**/*.mm"]
+      # netcdfplugin needs libnetcdf, which isn't built.
+      - path: ../third_party/uiuc/plugins/molfile_plugin/src
+        includes: ["*.cpp", "*.c"]
+        excludes: ["netcdfplugin.c"]
+    preBuildScripts:
+      # Components may only include lower layers (scripts/check_deps.py).
+      - name: "Check component dependencies"
+        basedOnDependencyAnalysis: false
+        script: |
+          /usr/bin/python3 "$SRCROOT/../scripts/check_deps.py"
+      # PyMOLBuildInfo.h (cmd.get_version): build date and git commit, rewritten
+      # only when the commit changes so the core isn't recompiled every build.
+      - name: "Build info"
+        basedOnDependencyAnalysis: false
+        script: |
+          OUT="$DERIVED_FILE_DIR/PyMOLBuildInfo.h"
+          SHA=$(git -C "$SRCROOT/.." rev-parse HEAD 2>/dev/null || true)
+          grep -q "\"$SHA\"" "$OUT" 2>/dev/null && exit 0
+          mkdir -p "$DERIVED_FILE_DIR"
+          printf '#define _PyMOL_BUILD_DATE %d\n#define _PYMOL_BUILD_GIT_SHA "%s"\n' "$(date +%s)" "$SHA" > "$OUT"
+    settings:
+      base: &core_settings
+        ARCHS: arm64
+        GCC_OPTIMIZATION_LEVEL: "2"
+        CLANG_CXX_LANGUAGE_STANDARD: gnu++17
+        GCC_C_LANGUAGE_STANDARD: compiler-default
+        CLANG_ENABLE_OBJC_ARC: NO
+        CLANG_ENABLE_MODULES: NO
+        # Headers are included by their path from src/ ("pymol/scene/scene.h");
+        # search only the -I paths below, so CHAMP's same-named headers and
+        # system headers never mix with the core's.
+        USE_HEADERMAP: NO
+        GCC_PREPROCESSOR_DEFINITIONS: [NDEBUG, PYMOL_NO_NETCDF_PLUGIN]
+        WARNING_CFLAGS: [-Werror=return-type, -Wno-switch, -Wno-narrowing, -Wno-char-subscripts]
+        # Xcode's extra default warnings, off for upstream PyMOL code (as before).
+        CLANG_WARN_DOCUMENTATION_COMMENTS: NO
+        GCC_WARN_64_TO_32_BIT_CONVERSION: NO
+        GCC_WARN_UNUSED_FUNCTION: NO
+        GCC_WARN_UNUSED_VARIABLE: NO
+        GCC_WARN_UNINITIALIZED_AUTOS: NO
+        CLANG_WARN_COMMA: NO
+        CLANG_WARN_STRICT_PROTOTYPES: NO
+        CLANG_WARN_UNREACHABLE_CODE: NO
+        OTHER_CFLAGS: [-fno-strict-aliasing, -Xpreprocessor, -fopenmp,
+          "-I$(PYMOL_ROOT)/src", "-I$(PYMOL_ROOT)/third_party",
+          "-I$(PYMOL_ROOT)/third_party/pocketfft", "-I$(DERIVED_FILE_DIR)", "$(PYMOL_PYTHON_INC)",
+          "-I$(PYMOL_EXTERNAL_PREFIX)/include/libpng16", "-I$(PYMOL_EXTERNAL_PREFIX)/include",
+          "-I$(PYMOL_EXTERNAL_PREFIX)/include/freetype2",
+          "-I$(PYMOL_EXTERNAL_PREFIX)/opt/libomp/include",
+          "-I$(PYMOL_ROOT)/third_party/uiuc/plugins/include",
+          "-I$(PYMOL_ROOT)/third_party/uiuc/plugins/molfile_plugin/src"]
+        OTHER_CPLUSPLUSFLAGS: "$(OTHER_CFLAGS)"
+
+  # CHAMP (chempy.champ._champ, used by fix_chemistry and vacuum electrostatics),
+  # with its own include path: its os_python.h/vla.h must not meet the core's.
+  champ:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: ../third_party/champ
+        includes: ["*.c"]
+    settings:
+      base:
+        <<: *core_settings
+        GCC_OPTIMIZATION_LEVEL: "3"
+        GCC_PREPROCESSOR_DEFINITIONS: [NDEBUG]
+        WARNING_CFLAGS: []
+        OTHER_CFLAGS: ["-I$(PYMOL_ROOT)/third_party/champ", "$(PYMOL_PYTHON_INC)"]
+
+  PyMOLViewer_macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: PyMOLViewer
+        excludes:
+          - "**/*.md"
+    dependencies:
+      - target: pymol_core
+      - target: champ
+      - package: SwiftTerm
+    settings:
+      base:
+        # Apple-silicon only: the embedded standalone Python 3.13, libpymol_core.a,
+        # and Homebrew deps are all arm64-only, so Release/Archive (which would
+        # otherwise build "Any Mac" incl. x86_64) must be pinned to arm64 or the
+        # link fails with undefined symbols. (Debug worked only because it
+        # builds the active arch.)
+        ARCHS: arm64
+        ONLY_ACTIVE_ARCH: "NO"
+        PRODUCT_NAME: mMol
+        PRODUCT_BUNDLE_IDENTIFIER: com.mmol.mMol
+        # App icon: Resources/Assets.xcassets/AppIcon (from swiftui/classic/mmol_icon.png).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_GENERATION_MODE: GeneratedFile
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        # User-facing app brand. PRODUCT_NAME = mMol → the bundle is mMol.app
+        # and CFBundleName derives from it. CFBundleDisplayName is set here; the
+        # post-build step below still force-sets CFBundleName = mMol since the
+        # generated plist can lag PRODUCT_NAME.
+        INFOPLIST_KEY_CFBundleDisplayName: mMol
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.education
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: -Onone
+          DEBUG_INFORMATION_FORMAT: dwarf
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+          # Ad-hoc signed; make_dmg.sh NOTARIZE=1 re-signs with a Developer ID,
+          # hardened runtime and mMol_DeveloperID.entitlements.
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "-"
+    postBuildScripts:
+      # User-facing app brand: force CFBundleName = mMol. PRODUCT_NAME is now
+      # mMol so the bundle is mMol.app, but the generated Info.plist can lag
+      # PRODUCT_NAME for CFBundleName (no INFOPLIST_KEY_* for it), so set it
+      # directly on the built plist (title bar / app menu).
+      - name: "Brand: set CFBundleName = mMol"
+        basedOnDependencyAnalysis: false
+        # Declare the generated Info.plist as an input so Xcode's build graph
+        # schedules this script AFTER Info.plist processing. Without this edge the
+        # script races plist generation and its plutil edits can be silently
+        # overwritten.
+        inputFiles:
+          - "$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"
+        script: |
+          set -e
+          PLIST="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+          [ -f "$PLIST" ] || { echo "no Info.plist at $PLIST"; exit 0; }
+          /usr/bin/plutil -replace CFBundleName -string "mMol" "$PLIST"
+          echo "CFBundleName -> mMol ($PLIST)"
+      # Register mMol as a handler/default for molecular file formats. The
+      # generated Info.plist (GENERATE_INFOPLIST_FILE=YES) has no INFOPLIST_KEY_*
+      # for the complex CFBundleDocumentTypes / UTImportedTypeDeclarations arrays,
+      # so inject them directly on the built plist. mMol owns
+      # .pse (LSHandlerRank=Owner); the structure/small-molecule/map families are
+      # declared as imported UTIs (conforming to public.data, plus public.text for
+      # the text-based ones) so mMol becomes a first-class handler and the
+      # default where nothing else claims the type. Registration happens via
+      # lsregister.
+      - name: "Brand: register molecular document types"
+        basedOnDependencyAnalysis: false
+        # Input dependency on the generated Info.plist forces this to run AFTER
+        # plist processing (see note above).
+        inputFiles:
+          - "$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)"
+        script: |
+          set -e
+          PLIST="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+          [ -f "$PLIST" ] || { echo "no Info.plist at $PLIST"; exit 0; }
+          /usr/bin/plutil -replace CFBundleDocumentTypes -json '[
+            {"CFBundleTypeName":"PyMOL Session","CFBundleTypeRole":"Editor","LSHandlerRank":"Owner","LSItemContentTypes":["org.pymol.pse"]},
+            {"CFBundleTypeName":"Molecular Structure","CFBundleTypeRole":"Viewer","LSHandlerRank":"Default","LSItemContentTypes":["org.pymol.structure"]},
+            {"CFBundleTypeName":"Small Molecule","CFBundleTypeRole":"Viewer","LSHandlerRank":"Default","LSItemContentTypes":["org.pymol.small-molecule"]},
+            {"CFBundleTypeName":"Electron Density / Map","CFBundleTypeRole":"Viewer","LSHandlerRank":"Default","LSItemContentTypes":["org.pymol.map"]}
+          ]' "$PLIST"
+          /usr/bin/plutil -replace UTImportedTypeDeclarations -json '[
+            {"UTTypeIdentifier":"org.pymol.pse","UTTypeDescription":"PyMOL Session","UTTypeConformsTo":["public.data"],"UTTypeTagSpecification":{"public.filename-extension":["pse"]}},
+            {"UTTypeIdentifier":"org.pymol.structure","UTTypeDescription":"Molecular Structure","UTTypeConformsTo":["public.data","public.text"],"UTTypeTagSpecification":{"public.filename-extension":["pdb","ent","cif","mmcif","mcif","mmtf"]}},
+            {"UTTypeIdentifier":"org.pymol.small-molecule","UTTypeDescription":"Small Molecule","UTTypeConformsTo":["public.data","public.text"],"UTTypeTagSpecification":{"public.filename-extension":["sdf","mol","mol2","xyz","mae"]}},
+            {"UTTypeIdentifier":"org.pymol.map","UTTypeDescription":"Electron Density / Map","UTTypeConformsTo":["public.data"],"UTTypeTagSpecification":{"public.filename-extension":["ccp4","mtz","dx","xplor","map","mrc"]}}
+          ]' "$PLIST"
+          # A document-based app declaring CFBundleDocumentTypes must also state
+          # whether it opens files in place. mMol opens documents in place
+          # (drag-drop), so declare it.
+          /usr/bin/plutil -replace LSSupportsOpeningDocumentsInPlace -bool YES "$PLIST"
+          echo "CFBundleDocumentTypes + UTImportedTypeDeclarations -> $PLIST"
+      # macOS runtime packaging: payload under Contents/Resources (so the shared
+      # bridge's config.home=<resourcePath>/python resolves to it).
+      - name: "macOS: Bundle Python + modules + data"
+        basedOnDependencyAnalysis: false
+        script: |
+          case "$PLATFORM_NAME" in macosx*) ;; *) exit 0 ;; esac
+          set -e
+          RES="$CODESIGNING_FOLDER_PATH/Contents/Resources"
+          mkdir -p "$RES"
+          rsync -au --delete "$SRCROOT/../deps_macos/python-standalone/python/" "$RES/python/"
+          # App Review compliance — prune from the embedded Python before signing:
+          #  (2.5.1) The bundled Tcl/Tk's libtcl9tk9.0.dylib references the private
+          #  AppKit symbol _NSWindowDidOrderOnScreenNotification. The native
+          #  Metal/SwiftUI app never launches the legacy pmg_tk Tkinter GUI, so the
+          #  whole Tcl/Tk stack is dead weight. Remove it.
+          PYLIB="$RES/python/lib"
+          rm -rf "$PYLIB"/libtcl*.dylib "$PYLIB"/libtk*.dylib \
+                 "$PYLIB"/tcl* "$PYLIB"/tk* "$PYLIB"/itcl* "$PYLIB"/thread* \
+                 "$PYLIB"/python*/tkinter
+          rm -f  "$PYLIB"/python*/lib-dynload/_tkinter*.so
+          # Nor does it use pip, IDLE, headers or the static build config: ~12 MB.
+          rm -rf "$RES/python/include" "$RES/python/share" "$PYLIB"/pkgconfig \
+                 "$PYLIB"/python*/ensurepip "$PYLIB"/python*/idlelib "$PYLIB"/python*/pydoc_data \
+                 "$PYLIB"/python*/config-*-darwin "$PYLIB"/python*/site-packages/pip* \
+                 "$RES/python/bin"/idle* "$RES/python/bin"/pip* "$RES/python/bin"/pydoc*
+          #  (2.5.2) CPython's stdlib urllib/parse.py lists 'itms-services' in
+          #  uses_netloc; Apple's static scanner reads that literal as the app
+          #  installing executable code via itms-services://. mMol never uses the
+          #  scheme — strip the token (no functional effect on URL parsing we do).
+          /usr/bin/sed -i '' "s/, 'itms-services'//g" "$PYLIB"/python*/urllib/parse.py
+          # --delete: a module or data file removed from the repo must not
+          # linger in an incrementally rebuilt app (ditto only adds).
+          rsync -a --delete --exclude __pycache__ "$SRCROOT/../modules/" "$RES/modules/"
+          rsync -a --delete "$SRCROOT/../data/" "$RES/data/"
+          # python-standalone ships its own (foreign) signatures and Xcode's final
+          # signing doesn't re-sign files under Resources/, so sign every embedded
+          # Mach-O with our identity here, before the bundle is sealed.
+          if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+            find "$RES/python" \( -name "*.dylib" -o -name "*.so" -o -path "*/bin/*" \) -type f |
+              while read -r f; do
+                /usr/bin/file "$f" | /usr/bin/grep -q "Mach-O" && \
+                  /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --timestamp=none "$f" || true
+              done
+          fi
+      # macOS portability: freetype/libpng are linked out of Homebrew (-lfreetype
+      # -lpng16 from /opt/homebrew/lib in PyMOLBridge.xcconfig), so the linker
+      # bakes /opt/homebrew/.../libfreetype.6.dylib into the binary as a hard load
+      # command. On any Mac without those exact Homebrew kegs (every end user, a
+      # clean VM) dyld can't find them and aborts at launch
+      # ("Library not loaded ... Namespace DYLD ... Library missing"). This step
+      # copies those dylibs into Contents/Frameworks and rewrites the load
+      # commands + ids to @rpath, adding @executable_path/../Frameworks to the
+      # binary's runpath, so the app is self-contained. Idempotent: a second run
+      # finds nothing to rewrite. The script signs only the copied dylibs (when
+      # signing); the main binary is sealed by Xcode's final CodeSign / make_dmg.
+      - name: "macOS: Bundle Homebrew dylibs into Frameworks (@rpath)"
+        basedOnDependencyAnalysis: false
+        script: |
+          case "$PLATFORM_NAME" in macosx*) ;; *) exit 0 ;; esac
+          set -e
+          if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+            /usr/bin/python3 "$SRCROOT/../scripts/bundle_macos_dylibs.py" \
+              "$CODESIGNING_FOLDER_PATH" \
+              --sign-identity "$EXPANDED_CODE_SIGN_IDENTITY" --hardened
+          else
+            /usr/bin/python3 "$SRCROOT/../scripts/bundle_macos_dylibs.py" \
+              "$CODESIGNING_FOLDER_PATH"
+          fi
+    scheme:
+      testTargets:
+        - PyMOLViewerTests
+      gatherCoverageData: false
+
+  # macOS unit-test target: hosts Swift logic tests with @testable import.
+  # Runs in-process inside the macOS app (TEST_HOST + BUNDLE_LOADER) so the full
+  # mMol Swift module is visible to @testable import without linking pymol_core again.
+  PyMOLViewerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - PyMOLViewerTests
+    dependencies:
+      - target: PyMOLViewer_macOS
+        link: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mmol.mMol.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/mMol.app/Contents/MacOS/mMol"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        # Blank out the app-level C++ bridge — the test bundle is pure Swift and
+        # must not inherit the bridging header or linker flags that pull in pymol_core.
+        SWIFT_OBJC_BRIDGING_HEADER: ""
+        OTHER_LDFLAGS: ""
+        OTHER_CPLUSPLUSFLAGS: ""

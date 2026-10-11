@@ -1,0 +1,258 @@
+
+/*
+A* -------------------------------------------------------------------
+B* This file contains source code for the PyMOL computer program
+C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific.
+D* -------------------------------------------------------------------
+E* It is unlawful to modify or remove this copyright notice.
+F* -------------------------------------------------------------------
+G* Please see the accompanying LICENSE file for further information.
+H* -------------------------------------------------------------------
+I* Additional authors of this source file include:
+-*
+-*
+-*
+Z* -------------------------------------------------------------------
+*/
+#ifndef _H_P
+#define _H_P
+
+#include "pymol/platform/main_thread.h"
+#include "pymol/platform/os_python.h"
+#include "pymol/objects/atom_info.h"
+#include "pymol/objects/object_molecule.h"
+#include "pymol/objects/coord_set.h"
+#include "pymol/base/pymol_globals.h"
+
+#include "pymol/zstring_view.h"
+
+#define cLockAPI 1
+#define cLockInbox 2
+#define cLockOutbox 3
+
+#define cPLog_pml_lf 0
+#define cPLog_pml 1
+#define cPLog_pym 2
+#define cPLog_no_flush 3
+
+#define cPType_string 1
+#define cPType_int 2
+#define cPType_int_as_string 3
+#define cPType_float 4
+#define cPType_stereo 5
+#define cPType_char_as_type 6
+#define cPType_model 7
+#define cPType_index 8
+#define cPType_int_custom_type 9
+#define cPType_xyz_float 10
+#define cPType_settings 11
+#define cPType_properties 12
+#define cPType_state 13
+#define cPType_schar 14
+#define cPType_uint32 15
+
+#define NUM_ATOM_PROPERTIES 43
+
+#define cPRunType_alter 1
+#define cPRunType_alter_state 2
+#define cPRunType_label 3
+
+unsigned getExplicitValence(ObjectMolecule const* obj, size_t atm);
+unsigned getExplicitDegree(ObjectMolecule const* obj, size_t atm);
+
+int PLabelAtomAlt(PyMOLGlobals* G, AtomInfoType* at, const char* model,
+                  const char* expr, int index);
+
+ov_status PCacheSet(PyMOLGlobals* G, PyObject* entry, PyObject* output);
+ov_status PCacheGet(PyMOLGlobals* G, PyObject** result_output,
+                    PyObject** result_entry, PyObject* input);
+
+void PInit(PyMOLGlobals* G, int global_instance);
+void PSetupEmbedded(PyMOLGlobals* G, int argc, char** argv);
+
+struct PyMOLOptionRec;
+
+void PConvertOptions(CPyMOLOptions* rec, PyObject* options);
+
+void PFree(PyMOLGlobals* G);
+void PExit(PyMOLGlobals* G, int code);
+void PParse(PyMOLGlobals* G,
+            pymol::zstring_view str_view); /* only accepts one command */
+void PDo(PyMOLGlobals* G,
+         const char* str); /* accepts multple commands seperated by newlines */
+
+int PAlterAtom(PyMOLGlobals* G, ObjectMolecule* obj, CoordSet* cs,
+               PyObject* expr_co, int read_only, int atm, PyObject* space);
+int PLabelAtom(PyMOLGlobals* G, ObjectMolecule* obj, CoordSet* cs,
+               PyObject* expr_co, int atm);
+int PAlterAtomState(PyMOLGlobals* G, PyObject* expr_co, int read_only,
+                    ObjectMolecule* obj, CoordSet* cs, int atm, int idx,
+                    int state, PyObject* space);
+
+void PLog(PyMOLGlobals* G, pymol::zstring_view str, int lf);
+void PLogFlush(PyMOLGlobals* G);
+
+void PLockStatus(PyMOLGlobals* G);
+int PLockStatusAttempt(PyMOLGlobals* G);
+void PUnlockStatus(PyMOLGlobals* G);
+
+void PBlock(PyMOLGlobals* G);
+void PUnblock(PyMOLGlobals* G);
+
+int PAutoBlock(PyMOLGlobals* G);
+void PAutoUnblock(PyMOLGlobals* G, int flag);
+
+void PBlockAndUnlockAPI(PyMOLGlobals* G);
+void PLockAPIAndUnblock(PyMOLGlobals* G);
+int PTryLockAPIAndUnblock(PyMOLGlobals* G);
+
+int PFlush(PyMOLGlobals* G);
+int PFlushFast(PyMOLGlobals* G);
+void PXDecRef(PyObject* obj);
+PyObject* PXIncRef(PyObject* obj);
+
+/**
+ * Like `Py_INCREF` but returns the input argument for convenience.
+ * Does not accept nullptr, unlike `PXIncRef`.
+ */
+inline PyObject* PIncRef(PyObject* obj) {
+  Py_INCREF(obj);
+  return obj;
+}
+
+void PErrPrintIfOccurred(PyMOLGlobals*);
+
+void PRunStringModule(PyMOLGlobals* G, const char* str);
+void PRunStringInstance(PyMOLGlobals* G, const char* str);
+
+int PComplete(PyMOLGlobals* G, char* str, int buf_size);
+
+int PTruthCallStr(PyObject* object, const char* method, const char* argument);
+int PTruthCallStr0(PyObject* object, const char* method);
+int PTruthCallStr1i(PyObject* object, const char* method, int argument);
+int PTruthCallStr4i(PyObject* object, const char* method, int a1, int a2,
+                    int a3, int a4);
+int PPovrayRender(PyMOLGlobals* G, const char* header, const char* inp,
+                  const char* file, int width, int height, int antialias);
+
+PyObject* PGetFontDict(PyMOLGlobals* G, float size, int face, int style);
+
+typedef struct {
+  long id;
+  PyThreadState* state;
+} SavedThreadRec;
+
+struct SettingPropertyWrapperObject;
+
+struct WrapperObject : PyObject {
+  //  PyObject* dict;
+  ObjectMolecule* obj;
+  CoordSet* cs;
+  AtomInfoType* atomInfo;
+  int atm;
+  int idx;
+  int state;
+  short read_only;  // set for PLabelAtom
+  PyMOLGlobals* G;
+  PyObject* dict;
+  SettingPropertyWrapperObject* settingWrapperObject;
+  SettingPropertyWrapperObject* propertyWrapperObject;
+};
+
+struct SettingPropertyWrapperObject : PyObject {
+  WrapperObject* wobj;
+};
+
+/* instance-specific Python object, containers, closures, and threads */
+
+#define MAX_SAVED_THREAD ((PYMOL_MAX_THREADS) + 3)
+
+struct _CP_inst {
+  /* instance-specific storage */
+
+  PyObject* obj;
+  PyObject* dict;
+  PyObject* exec;
+  PyObject* cmd;
+  PyObject* parse;    /* parse closure */
+  PyObject* complete; /* complete partial command / TAB action */
+  PyObject* cmd_do;
+  PyObject* colortype; /* backwards compatible iterate/alter color type */
+
+  PyObject* cache;
+
+  /* locks and threads */
+
+  PyObject* lock; /* API locks */
+  PyObject* lock_attempt;
+  PyObject* unlock;
+
+  PyObject* lock_api_status; /* status locks */
+  PyObject* lock_api_glut;   /* GLUT locks */
+
+  int glut_thread_keep_out;
+  SavedThreadRec savedThread[MAX_SAVED_THREAD];
+};
+
+using unique_PyObject_ptr_auto_gil =
+    std::unique_ptr<PyObject, pymol::pyobject_delete_auto_gil>;
+
+namespace pymol {
+
+/**
+ * Handy RAII applications for acquiring the GIL
+ */
+
+class pblock {
+  PyMOLGlobals* m_G{nullptr};
+
+ public:
+  pblock(PyMOLGlobals* G) : m_G(G) { PBlock(m_G); }
+  ~pblock() { PUnblock(m_G); }
+};
+
+class pautoblock {
+  PyMOLGlobals* m_G;
+  int m_blocked{};
+
+ public:
+  pautoblock(PyMOLGlobals* G) : m_G(G), m_blocked(PAutoBlock(m_G)) {}
+  ~pautoblock() { PAutoUnblock(m_G, m_blocked); }
+};
+
+/**
+ * Shares ownership of a managed Python object.
+ * @param obj Borrowed reference whose ownership will be transferred
+ * @return owning pointer to Python object
+ */
+
+unique_PyObject_ptr_auto_gil make_auto_gil(PyObject* obj);
+
+}  // namespace pymol
+
+/**
+ * Makes Deep Copy of PyObject
+ * @param input source PyObject to be copied
+ * @return new PyObject
+ */
+
+unique_PyObject_ptr_auto_gil PDeepCopy(PyMOLGlobals* G, PyObject* input);
+
+/* PyObject *GetBondsDict(void); */
+
+/* all of the following Python objects must be invariant global
+   modules & module dictionaries for the application */
+
+extern PyObject* P_menu; /* used by Menu */
+extern PyObject* P_xray; /* used by Symmetry */
+extern PyObject*
+    P_chempy; /* used by CoordSet and Selector for construction of models */
+extern PyObject* P_models;  /* used by Selector for construction of models */
+extern PyObject* P_setting; /* used by Setting.c */
+extern PyTypeObject*
+    P_wrapper; /* used by P.c for lazy-loading settings/properties/attributes */
+extern PyObject* P_CmdException;           /* pymol.CmdException */
+extern PyObject* P_QuietException;         /* pymol.parsing.CmdException */
+extern PyObject* P_IncentiveOnlyException; /* pymol.IncentiveOnlyException */
+
+#endif

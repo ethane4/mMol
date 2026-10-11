@@ -1,0 +1,72 @@
+
+/*
+A* -------------------------------------------------------------------
+B* This file contains source code for the PyMOL computer program
+C* copyright 1998-2006 by Warren Lyford Delano of DeLano Scientific.
+D* -------------------------------------------------------------------
+E* It is unlawful to modify or remove this copyright notice.
+F* -------------------------------------------------------------------
+G* Please see the accompanying LICENSE file for further information.
+H* -------------------------------------------------------------------
+I* Additional authors of this source file include:
+-*
+-*
+-*
+Z* -------------------------------------------------------------------
+*/
+#include "pymol/platform/os_python.h"
+
+#include "pymol/platform/os_predef.h"
+#include "pymol/platform/os_std.h"
+#include "pymol/platform/os_gl.h"
+
+#include "pymol/objects/object_group.h"
+#include "pymol/base/base.h"
+#include "pymol/platform/memory_debug.h"
+#include "pymol/pyconv/pconv.h"
+
+int ObjectGroupNewFromPyList(PyMOLGlobals* G, PyObject* list,
+                             ObjectGroup** result, int version) {
+  int ok = true, ll = 0;
+  ObjectGroup* I = nullptr;
+  (*result) = nullptr;
+  if (ok) ok = (list != Py_None);
+  if (ok) ok = PyList_Check(list);
+  if (ok) ll = PyList_Size(list);
+  I = new ObjectGroup(G);
+  if (ok) ok = (I != nullptr);
+  if (ok) {
+    auto* val = PyList_GetItem(list, 0);
+    ok = ObjectFromPyList(G, val, I);
+  }
+  if (ok)
+    ok = CPythonVal_PConvPyIntToInt_From_List(G, list, 1, &I->OpenOrClosed);
+  if (ok && (ll > 2)) {
+    // State removed because it was unused
+  }
+  if (ok) {
+    *result = I;
+  } else {
+    /* to do: cleanup */
+  }
+  return (ok);
+}
+
+PyObject* ObjectGroupAsPyList(ObjectGroup* I) {
+  PyObject* result = nullptr;
+
+  result = PyList_New(3);
+  PyList_SetItem(result, 0, ObjectAsPyList(I));
+  PyList_SetItem(result, 1, PyInt_FromLong(I->OpenOrClosed));
+
+  // State removed in PyMOL 2.4.0
+  CObjectState tmp_state(I->G);
+  PyList_SetItem(result, 2, ObjectStateAsPyList(&tmp_state));
+
+  return (PConvAutoNone(result));
+}
+ObjectGroup::~ObjectGroup() {}
+ObjectGroup::ObjectGroup(PyMOLGlobals* G) : pymol::CObject(G) {
+  auto I = this;
+  I->type = cObjectGroup;
+}

@@ -1,0 +1,47 @@
+
+
+/*
+A* -------------------------------------------------------------------
+B* This file contains source code for the PyMOL computer program
+C* Copyright (c) Schrodinger, LLC.
+D* -------------------------------------------------------------------
+E* It is unlawful to modify or remove this copyright notice.
+F* -------------------------------------------------------------------
+G* Please see the accompanying LICENSE file for further information.
+H* -------------------------------------------------------------------
+I* Additional authors of this source file include:
+-*
+-*
+-*
+Z* -------------------------------------------------------------------
+*/
+#ifndef _H_MyPNG
+#define _H_MyPNG
+
+#include <memory>
+#include <vector>
+
+#include "pymol/image/image.h"
+#include "pymol/zstring_view.h"
+
+#include "pymol/base/pymol_globals.h"
+
+#define cMyPNG_FormatPNG 0
+#define cMyPNG_FormatPPM 1
+
+int MyPNGWrite(pymol::zstring_view file_name, const pymol::Image& img,
+               const float dpi, const int format, const int quiet,
+               const float screen_gamma, const float file_gamma,
+               png_outbuf_t* io_ptr = nullptr);
+
+/**
+ * Fast writes (#601): no zlib compression and no row filtering, for PNGs
+ * that are thrown away right after being read back -- a movie export's
+ * per-frame files. Process-wide; the movie exporter turns it on around each
+ * frame's render only, so image exports keep normal compression.
+ */
+void MyPNGSetFastWrite(bool fast);
+
+std::unique_ptr<pymol::Image> MyPNGRead(const char* file_name);
+
+#endif

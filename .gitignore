@@ -1,0 +1,18 @@
+# Build output
+build_dd/
+build_dmg/
+*.dmg
+
+# Embedded Python, numpy and Biopython (scripts/setup_macos_deps.sh)
+deps_macos/
+
+# Per-developer settings
+PyMOLBridge.local.xcconfig
+xcuserdata/
+.claude/
+.vscode/
+.DS_Store
+
+# Python bytecode
+__pycache__/
+*.pyc

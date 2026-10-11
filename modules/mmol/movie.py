@@ -1,0 +1,556 @@
+"""Playback / movie query + authoring for the native SwiftUI app.
+
+Emits one feedback line `PLAYBACK:<json>` that PyMOLEngine.parsePlaybackFeedback()
+consumes to drive the Timeline transport bar (frame counter, scrubber, play state,
+loop, fps). In PyMOL, NMR models, MD-trajectory frames and movie frames are all the
+SAME thing — a 1-based movie frame index that maps (via mset) to a coordinate state
+— so a single `frame`/`count_frames` pair drives every case.
+
+Playback itself is CORE-driven: the Swift layer calls cmd.mplay()/cmd.mstop() and
+the renderer's idle tick (SceneIdle, run every Metal frame) advances frames at
+movie_fps, honoring movie_loop and firing any mview/mdo keyframe commands. The
+Swift layer only scrubs (cmd.frame) and mirrors this state for the UI.
+
+Kept as a bundled module (not an inline Swift string) so it stays readable and
+testable. Mirrors the appkit_inspector.poll pattern.
+"""
+
+from pymol import cmd
+
+
+def _drop_scene_animation():
+    """Forget the per-scene setting animation authored into the OLD movie. Must
+    run BEFORE the mset that discards it: author([]) blanks the frame commands it
+    owns (while those slots still exist) and clears its track, so the animation
+    cannot be persisted into — or re-authored on top of — an unrelated movie."""
+    try:
+        from mmol import scene_anim as _an
+        _an.author([])
+    except Exception as e:
+        print('MOVIE_ERR:' + str(e))
+
+
+def reset_movie():
+    """Clear the movie timeline (frame sequence + camera keyframes) and rewind."""
+    try:
+        _drop_scene_animation()
+        cmd.mview('reset')
+        cmd.mset('')
+        cmd.rewind()
+    except Exception as e:
+        print('MOVIE_ERR:' + str(e))
+
+
+def _multistate_objects(names=None):
+    """{objname: nstates} for objects with >1 coordinate state. `names` (list)
+    restricts to those objects; None = every object in the session."""
+    out = {}
+    try:
+        objs = names if names else cmd.get_object_list()
+    except Exception:
+        objs = []
+    for o in (objs or []):
+        try:
+            ns = int(cmd.count_states(o))
+            if ns > 1:
+                out[o] = ns
+        except Exception:
+            pass
+    return out
+
+
+def _emit_state_sweep(obj, lo, hi, start, end, mode='sweep'):
+    """Store per-object STATE keyframes so `obj` sweeps models lo..hi across movie
+    frames [start,end], then interpolate that object's own track. Both endpoints
+    are flagged (state=) so View.cpp interpolates the state channel; the per-object
+    ViewElem sets the object's own `state` at render (independent of the mset and
+    of other objects). mode: 'sweep' (lo->hi) or 'loop' (lo->hi->lo)."""
+    try:
+        s = int(start)
+        e = int(end)
+        lo = int(lo)
+        hi = int(hi)
+        if e <= s:
+            e = s + 1
+        if hi < lo:
+            lo, hi = hi, lo
+        if mode == 'loop':
+            mid = (s + e) // 2
+            cmd.mview('store', object=obj, first=s, state=lo)
+            cmd.mview('store', object=obj, first=mid, state=hi)
+            cmd.mview('store', object=obj, first=e, state=lo)
+        else:
+            cmd.mview('store', object=obj, first=s, state=lo)
+            cmd.mview('store', object=obj, first=e, state=hi)
+        cmd.mview('interpolate', object=obj)
+    except Exception as ex:
+        print('MOVIE_ERR:' + str(ex))
+
+
+def _reset_object_motions():
+    """Drop every object's own mview track. `mview reset` alone clears only the
+    camera track, so per-object state/matrix keyframes from the previous build
+    would survive at frames the new build doesn't overwrite (e.g. a hold pinned
+    at frame 41 bleeding into a shorter lane). The authoring paths here own
+    those tracks and re-emit them on every build."""
+    for o in cmd.get_object_list() or []:
+        try:
+            cmd.mview('reset', object=o)
+        except Exception:
+            pass
+
+
+def _current_states():
+    """{objname: model shown now} for every multi-state object. Reads the
+    object's own `state` (which falls back to the global state when unset), so
+    a model picked in the Object panel is honored as well as `set state, N`."""
+    out = {}
+    for o, n in _multistate_objects().items():
+        try:
+            s = int(cmd.get('state', o))
+        except Exception:
+            continue
+        out[o] = max(1, min(s, n))
+    return out
+
+
+def _emit_state_hold(obj, pins, total):
+    """Hold `obj` on the models it was pinned to (#579): per-object STATE
+    keyframes at each (frame, state) in `pins`, extended to frames 1 and `total`
+    so the object never falls back to the global mset (model 1) before the first
+    pin or after the last. Equal pins interpolate to a constant model; unequal
+    ones move between them like any other keyframed channel."""
+    try:
+        pts = {}
+        for f, s in pins:
+            pts[int(f)] = int(s)
+        if not pts:
+            return
+        fs = sorted(pts)
+        total = max(int(total), 2)
+        pts.setdefault(1, pts[fs[0]])
+        pts.setdefault(total, pts[fs[-1]])
+        for f in sorted(pts):
+            cmd.mview('store', object=obj, first=f, state=pts[f])
+        cmd.mview('interpolate', object=obj)
+    except Exception as ex:
+        print('MOVIE_ERR:' + str(ex))
+
+
+def reset_ensemble():
+    """Drop all movie authoring and rewind so a multi-state object plays its raw
+    models again (count_frames falls back to the state count)."""
+    try:
+        _drop_scene_animation()
+        cmd.mview('reset')
+        cmd.mset('')
+        cmd.rewind()
+    except Exception as e:
+        print('MOVIE_ERR:' + str(e))
+
+
+def _scene_keyframes():
+    """[(frame, scene_name, power)] for every scene marker currently on the
+    timeline, recovered by scrubbing: a scene-tagged keyframe sets
+    scene_current_name when its frame is displayed. Restores the playhead before
+    returning — the caller's frame must survive the scrub.
+
+    The per-keyframe power is reported as 0.0 ("none stored") because scrubbing
+    cannot read ViewElem.power back. That is not a loss here: every path that
+    scrubs also drives the easing with a movie-wide `mview reinterpolate power=`,
+    which the core resolves ahead of both endpoints — the caller passes that same
+    value to mmol_scene_anim.author(power=...)."""
+    out = []
+    try:
+        n = int(cmd.count_frames())
+    except Exception:
+        return out
+    try:
+        saved = int(cmd.get_frame() or 1)
+    except Exception:
+        saved = 1
+    seen = None
+    # Displaying a frame runs its authored commands (enter_scene, interpolated
+    # `set`s), so the scrub is wrapped: it READS the cuts and must leave the
+    # live settings as it found them (#508).
+    from mmol import scenes as _rs
+    with _rs.preserved():
+        for f in range(1, n + 1):
+            try:
+                cmd.frame(f)
+                cur = cmd.get('scene_current_name') or ''
+            except Exception:
+                continue
+            if cur and cur != seen:
+                out.append((f, cur, 0.0))
+            seen = cur
+        try:
+            cmd.frame(saved)
+        except Exception:
+            pass
+    return out
+
+
+def append_template(kind,
+                    duration=8.0,
+                    axis='y',
+                    angle=30.0,
+                    seconds_per_scene=4.0,
+                    scenes=None,
+                    factor=1):
+    """APPEND a template to the END of the current timeline (never clears), so
+    the movie is composed by stacking templates. Places the keyframes itself at
+    deterministic frames — the Swift TimelinePanel computes the SAME frames to
+    draw the camera diamonds / scene markers (keep the two in sync):
+
+      roll : camera keyframes at [start+1, +n/3, +2n/3, start+n], 360 spin
+      rock : camera keyframes at [start+1, +n/4, +3n/4, start+n], +/-angle
+      scenes : a scene marker (mview store, scene=) every seconds_per_scene
+      state_loop/sweep : cycle object states (no camera/scene markers)
+
+    `start` is the current frame count (0 when there's no movie yet, so the
+    first template starts at frame 1). Uses `madd` to extend without disturbing
+    existing keyframes."""
+    try:
+        fps = cmd.get_setting_float('movie_fps') or 30.0
+        cur = cmd.count_frames()
+        start = 0 if cur <= 1 else cur
+
+        def ensure(nn):
+            if start == 0:
+                cmd.mset('1 x%d' % nn)
+            else:
+                cmd.madd('1 x%d' % nn)
+
+        k = str(kind)
+        if k in ('roll', 'rock'):
+            n = max(2, int(round(duration * fps)))
+            ensure(n)
+            v = cmd.get_view()
+            if k == 'roll':
+                frames = [
+                    start + 1, start + 1 + n // 3, start + 1 + (2 * n) // 3,
+                    start + n
+                ]
+                turns = [0, 120, 240, 360]
+            else:
+                frames = [
+                    start + 1, start + 1 + n // 4, start + 1 + (3 * n) // 4,
+                    start + n
+                ]
+                turns = [0, float(angle), -float(angle), 0]
+            for f, deg in zip(frames, turns):
+                cmd.frame(f)
+                cmd.set_view(v)
+                if deg:
+                    cmd.turn(str(axis), float(deg))
+                cmd.mview('store', first=f)
+            cmd.mview('reinterpolate', power=0.0, linear=0.0)
+
+        elif k == 'scenes':
+            names = [
+                x for x in (scenes if scenes else cmd.get_scene_list()) if x
+            ]
+            if names:
+                per = max(2, int(round(float(seconds_per_scene) * fps)))
+                ensure(per * len(names))
+                motion = []
+                for i, nm in enumerate(names):
+                    f = start + 1 + i * per
+                    cmd.frame(f)
+                    from mmol import scenes as _rs
+                    with _rs.suspended():  # read, not apply (#508)
+                        cmd.scene(nm, 'recall')
+                        cmd.mview('store', first=f, scene=nm)  # recalls too
+                    try:
+                        from mmol import scenes as _rs
+                        motion += _rs.emit_object_motion(nm, f)
+                    except Exception:
+                        pass
+                cmd.mview('reinterpolate', power=0.0, linear=0.0)
+                for obj in dict.fromkeys(motion):
+                    try:
+                        cmd.mview('interpolate', object=obj)
+                    except Exception:
+                        pass
+                # Author from ALL markers currently on the timeline (not just the
+                # ones this batch placed). _scene_keyframes() recovers every
+                # scene-tagged keyframe by scrubbing, so calling append_template
+                # a second time does not wipe the first batch's animation: author
+                # runs once over the union, not twice over disjoint sets.
+                # Unconditional: author([]) is the reset when names is empty;
+                # guarding would leave a previous movie's animation live in the
+                # module for the non-scenes path.
+                try:
+                    from mmol import scene_anim as _an
+                    _an.author(_scene_keyframes())
+                except Exception as e:
+                    print('MOVIE_ERR:' + str(e))
+
+        elif k in ('state_loop', 'state_sweep'):
+            maxs = 1
+            for o in cmd.get_object_list():
+                try:
+                    maxs = max(maxs, cmd.count_states(o))
+                except Exception:
+                    pass
+            if maxs > 1:
+                fac = max(1, int(factor))
+                seq = list(range(1, maxs + 1))
+                if k == 'state_sweep':
+                    seq = seq + list(range(maxs - 1, 1, -1))
+                spec = ' '.join(str(s) for s in seq for _ in range(fac))
+                if start == 0:
+                    cmd.mset(spec)
+                else:
+                    cmd.madd(spec)
+
+        cmd.rewind()
+    except Exception as e:
+        print('MOVIE_ERR:' + str(e))
+
+
+# --- Unified single-track timeline ------------------------------------------
+#
+# The docked TimelinePanel edits ONE ordered lane of "objects" (camera keyframes
+# + scene markers) joined by transitions (duration + easing). Swift owns the
+# order/timing/easing (the things the UI edits); Python owns the heavy camera
+# view matrices, keyed by the item's UUID. On every edit Swift calls rebuild()
+# with the ordered spec and we lay a fresh movie. Session-scoped (the dict lives
+# for the process, like the Swift-side item list) — not restored from a .pse.
+# Alongside each view we keep the model every multi-state object showed when
+# the item was captured (#579), so a camera item holds that model instead of
+# sweeping the ensemble.
+
+_views = {}
+_states = {}  # cam UUID -> {objname: state} at capture time
+
+
+def capture_view(cam_id):
+    """Store the current camera view under `cam_id` (a camera item's UUID)."""
+    try:
+        _views[str(cam_id)] = list(cmd.get_view())
+        _states[str(cam_id)] = _current_states()
+    except Exception as e:
+        print('MOVIE_ERR:' + str(e))
+
+
+def forget_view(cam_id):
+    """Drop the stored view for a deleted camera item."""
+    _views.pop(str(cam_id), None)
+    _states.pop(str(cam_id), None)
+
+
+def forget_all_views():
+    """Drop every stored camera view (timeline cleared / new session)."""
+    _views.clear()
+    _states.clear()
+
+
+def capture_template_views(ids_json, kind, axis='y', angle=30.0):
+    """Compute + store the waypoint camera views for a roll/rock template under
+    the ordered `ids` (Swift pre-generates one UUID per waypoint). Views are
+    derived from the CURRENT view so the template spins/rocks around wherever
+    the molecule is now; the live view is left unchanged. Every waypoint also
+    records the models showing now, so the motion holds them (#579).
+
+      roll : equal steps around a full 360 turn about `axis`.
+      rock : 0 -> +angle -> -angle -> 0 about `axis` (the canonical 4 points)."""
+    import json
+    try:
+        ids = json.loads(ids_json)
+        if not ids:
+            return
+        v0 = cmd.get_view()
+        held = _current_states()
+        n = len(ids)
+        k = str(kind)
+        ax = str(axis)
+        if k == 'roll':
+            turns = [i * (360.0 / (n - 1)) for i in range(n)
+                    ] if n > 1 else [0.0]
+        elif k == 'rock' and n == 4:
+            turns = [0.0, float(angle), -float(angle), 0.0]
+        elif k == 'rock':
+            turns = [0.0] + [
+                (float(angle) if i % 2 else -float(angle)) for i in range(1, n)
+            ]
+        else:
+            turns = [0.0] * n
+        for cid, deg in zip(ids, turns):
+            cmd.set_view(v0)
+            if deg:
+                cmd.turn(ax, float(deg))
+            _views[str(cid)] = list(cmd.get_view())
+            _states[str(cid)] = dict(held)
+        cmd.set_view(v0)  # restore the live view
+    except Exception as e:
+        print('MOVIE_ERR:' + str(e))
+
+
+def rebuild(spec_json):
+    """Rebuild the ENTIRE movie from an ordered item list (the unified-track
+    source of truth lives in Swift). `spec_json` decodes to an ordered list of
+    ``{frame, cam:<uuid>|null, scene:<base64 name>|null, power, linear}``:
+
+      - camera item : ``cam`` is a UUID whose 18-float view is in ``_views``.
+      - scene item  : ``scene`` is the base64-encoded scene name; the scene is
+        recalled to establish the live camera before storing.
+
+    ``power``/``linear`` are the easing of the transition INTO that item
+    (0/0 = smooth default, 1/1 = linear). We clear the timeline, lay a fresh
+    ``mset`` of the right length, store each keyframe with its per-keyframe
+    easing, then a single ``mview interpolate`` fills the gaps (validated to
+    honor per-keyframe easing) and rewind. Base64 keeps arbitrary scene names
+    safe across the Swift->Python string boundary."""
+    import json
+    import base64
+    try:
+        spec = json.loads(spec_json)
+        if not spec:
+            reset_ensemble()
+            return
+        cmd.mview('reset')
+        _reset_object_motions()
+        total = max(2, max(int(it.get('end', it['frame'])) for it in spec))
+        cmd.mset('1 x%d' % total)
+
+        state_clips = [it for it in spec if it.get('states')]
+        cam_scene = [it for it in spec if not it.get('states')]
+        motion = []  # objects that received per-scene TTT keyframes (#204)
+        scene_kfs = []  # (frame, scene_name, power) for the setting animation
+        pins = {}  # objname -> [(frame, state)] the items hold it on (#579)
+
+        # Camera + scene keyframes on the GLOBAL track (camera view / scene reps),
+        # plus an optional pinned global state for non-swept objects.
+        for it in cam_scene:
+            f = int(it['frame'])
+            power = float(it.get('power', 0.0))
+            linear = int(it.get('linear', 0))
+            cmd.frame(f)
+            sc = it.get('scene')
+            if sc:
+                name = base64.b64decode(sc).decode('utf-8')
+                from mmol import scenes as _rs
+                with _rs.suspended():  # read, not apply (#508)
+                    cmd.scene(name, 'recall')  # live view+reps become the scene
+                    # mview store ... scene= recalls the scene itself as well
+                    cmd.mview('store',
+                              first=f,
+                              scene=name,
+                              power=power,
+                              linear=linear)
+                # Preserve the scene's stored state for non-swept objects.
+                try:
+                    cmd.mview('store', first=f, state=int(cmd.get_state()))
+                except Exception:
+                    pass
+                # #204: author per-object Move-mode TTT keyframes for this scene.
+                try:
+                    from mmol import scenes as _rs
+                    motion += _rs.emit_object_motion(name, f)
+                except Exception:
+                    pass
+                scene_kfs.append((f, name, power))
+            else:
+                cam = it.get('cam')
+                v = _views.get(str(cam)) if cam is not None else None
+                if v:
+                    cmd.set_view(v)
+                cmd.mview('store', first=f, power=power, linear=linear)
+                for obj, s in _states.get(str(cam), {}).items():
+                    pins.setdefault(obj, []).append((f, s))
+            ps = it.get('state')
+            if ps is not None:
+                cmd.mview('store', first=f, state=int(ps))
+                # An explicit pin wins over the capture-time snapshot, and must
+                # land on the per-object tracks too: those win at render.
+                for obj in _multistate_objects():
+                    pins.setdefault(obj, []).append((f, int(ps)))
+        if cam_scene:
+            cmd.mview('interpolate')
+        # #204: interpolate each object's matrix track once (keyframes stored with
+        # freeze=1 above). dict.fromkeys de-dups while preserving order.
+        for obj in dict.fromkeys(motion):
+            try:
+                cmd.mview('interpolate', object=obj)
+            except Exception as e:
+                print('MOVIE_ERR:' + str(e))
+        # Per-scene render settings (DOF etc.) across the transitions. AFTER the
+        # interpolate above: the DOF builder resolves focus under each frame's
+        # interpolated view.
+        # UNCONDITIONAL — a rebuild whose scene items were all deleted must reach
+        # author([]) to drop the previous movie's animation, which mset wipes from
+        # Cmd[] but which would otherwise still be persisted and re-authored.
+        try:
+            from mmol import scene_anim as _an
+            _an.author(scene_kfs)
+        except Exception as e:
+            print('MOVIE_ERR:' + str(e))
+
+        # State sweeps — per-object tracks (independent; no clamping between objects).
+        if state_clips:
+            swept = set()
+            for clip in state_clips:
+                start = int(clip['frame'])
+                end = int(clip.get('end', total))
+                mode = str(clip.get('mode', 'sweep'))
+                req_first = int(clip.get('first', 1) or 1)
+                req_last = int(clip.get('last', 0) or
+                               0)  # 0 = through the last model
+                ms = _multistate_objects(clip.get('objects'))
+                swept.update(ms)
+                if mode == 'lockstep':
+                    # One global state sweep across [start,end]; shorter objects clamp.
+                    mx = max(ms.values()) if ms else 1
+                    lo = max(1, min(req_first, mx))
+                    hi = mx if req_last <= 0 else max(1, min(req_last, mx))
+                    span = max(1, end - start)
+                    seq = ' '.join(
+                        str(int(lo + round((hi - lo) * (i - start) / span)))
+                        for i in range(start, end + 1))
+                    cmd.mset(seq,
+                             start)  # overwrite that span of the global mset
+                else:
+                    for obj, n in ms.items():
+                        lo = max(1, min(req_first, n))
+                        hi = n if req_last <= 0 else max(1, min(req_last, n))
+                        _emit_state_sweep(obj, lo, hi, start, end, mode)
+            # Objects no clip plays keep the models their camera items hold.
+            for obj in _multistate_objects():
+                if obj in pins and obj not in swept:
+                    _emit_state_hold(obj, pins[obj], total)
+        else:
+            # A camera item holds the models it was captured on (#579): a Roll
+            # moves the camera, not the ensemble. Objects no item pins (loaded
+            # after the camera items, or a scenes-only lane) keep the
+            # non-destructive default — auto-sweep across the whole movie so
+            # they never freeze on model 1.
+            for obj, n in _multistate_objects().items():
+                if obj in pins:
+                    _emit_state_hold(obj, pins[obj], total)
+                else:
+                    _emit_state_sweep(obj, 1, n, 1, total, 'sweep')
+
+        cmd.rewind()
+    except Exception as e:
+        print('MOVIE_ERR:' + str(e))
+
+
+def poll():
+    """Emit the PLAYBACK feedback line (current frame / length / play state)."""
+    import json
+    try:
+        # count_frames() == SceneCountFrames: the movie length when an mset
+        # exists, else max(state count) across objects — so a plain multi-state
+        # NMR/trajectory object (no explicit movie) still reports its length.
+        d = {
+            'frame': int(cmd.get_frame()),
+            'count': int(cmd.count_frames()),
+            'playing': 1 if cmd.get_movie_playing() else 0,
+            'loop': int(cmd.get_setting_int('movie_loop')),
+            'fps': float(cmd.get_setting_float('movie_fps')),
+        }
+        print('PLAYBACK:' + json.dumps(d))
+    except Exception as e:
+        print('PLAYBACK_ERR:' + str(e))

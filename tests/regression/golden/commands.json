@@ -1,0 +1,481 @@
+{
+ "align": [
+  0.4512,
+  1220,
+  5,
+  1.2299,
+  1510,
+  996.0,
+  198
+ ],
+ "angle": 40.4054,
+ "color and label": "ran",
+ "console hint": "{\"cmd\": \"fetch\", \"about\": \"Download structures (PDB ID, assembly, density map) and load them\", \"params\": [{\"name\": \"code\", \"req\": true, \"default\": \"\", \"minor\": false}, {\"name\": \"name\", \"req\": false, \"default\": \"\", \"minor\": false}, {\"name\": \"state\", \"req\": false, \"default\": \"0\", \"minor\": false}, {\"name\": \"finish\", \"req\": false, \"default\": \"1\", \"minor\": true}, {\"name\": \"discrete\", \"req\": false, \"default\": \"-1\", \"minor\": true}, {\"name\": \"multiplex\", \"req\": false, \"default\": \"-2\", \"minor\": true}, {\"name\": \"zoom\", \"req\": false, \"default\": \"-1\", \"minor\": true}, {\"name\": \"type\", \"req\": false, \"default\": \"\", \"minor\": false}, {\"name\": \"async\", \"req\": false, \"default\": \"0\", \"minor\": false}, {\"name\": \"path\", \"req\": false, \"default\": \"\", \"minor\": false}, {\"name\": \"file\", \"req\": false, \"default\": \"\", \"minor\": true}], \"arg\": 7, \"argdoc\": \"what to download\", \"example\": \"fetch 4hhb, type=assembly\", \"choices\": [{\"text\": \"cif\", \"desc\": \"the structure (default)\", \"post\": \"\"}, {\"text\": \"assembly\", \"desc\": \"biological assembly: the full complex (= pdb1)\", \"post\": \"\"}, {\"text\": \"density\", \"desc\": \"2Fo-Fc electron density map (= 2fofc)\", \"post\": \"\"}, {\"text\": \"difference\", \"desc\": \"Fo-Fc difference density map (= fofc)\", \"post\": \"\"}, {\"text\": \"em\", \"desc\": \"cryo-EM map by EMDB ID, e.g. fetch 1234 (= emd)\", \"post\": \"\"}, {\"text\": \"pubchem\", \"desc\": \"PubChem compound by CID (= cid)\", \"post\": \"\"}, {\"text\": \"pdb\", \"desc\": \"the structure, legacy PDB format\", \"post\": \"\"}, {\"text\": \"bcif\", \"desc\": \"the structure, binary CIF\", \"post\": \"\"}, {\"text\": \"pdb1\", \"desc\": \"biological assembly 1 (pdb2, pdb3: others)\", \"post\": \"\"}, {\"text\": \"2fofc\", \"desc\": \"2Fo-Fc density map\", \"post\": \"\"}, {\"text\": \"fofc\", \"desc\": \"Fo-Fc difference map\", \"post\": \"\"}, {\"text\": \"emd\", \"desc\": \"cryo-EM map\", \"post\": \"\"}, {\"text\": \"cid\", \"desc\": \"PubChem compound\", \"post\": \"\"}, {\"text\": \"sid\", \"desc\": \"PubChem substance\", \"post\": \"\"}], \"start\": 17}",
+ "counts": {
+  "all": 3576,
+  "hetatm": 236,
+  "name CA": 396,
+  "organic": 91,
+  "polymer": 3358,
+  "sele": 162,
+  "solvent": 127
+ },
+ "distance": 19.5505,
+ "file format round trips": {
+  "cif": [
+   45,
+   49,
+   [
+    [
+     4.21,
+     17.36,
+     1.54
+    ],
+    [
+     19.06,
+     27.58,
+     10.18
+    ]
+   ]
+  ],
+  "mol": [
+   45,
+   49,
+   [
+    [
+     4.21,
+     17.36,
+     1.54
+    ],
+    [
+     19.06,
+     27.58,
+     10.18
+    ]
+   ]
+  ],
+  "mol2": [
+   45,
+   49,
+   [
+    [
+     4.21,
+     17.36,
+     1.54
+    ],
+    [
+     19.06,
+     27.58,
+     10.18
+    ]
+   ]
+  ],
+  "pdb": [
+   45,
+   49,
+   [
+    [
+     4.21,
+     17.36,
+     1.54
+    ],
+    [
+     19.06,
+     27.58,
+     10.18
+    ]
+   ]
+  ],
+  "sdf": [
+   45,
+   49,
+   [
+    [
+     4.21,
+     17.36,
+     1.54
+    ],
+    [
+     19.06,
+     27.58,
+     10.18
+    ]
+   ]
+  ],
+  "xyz": [
+   45,
+   49,
+   [
+    [
+     4.21,
+     17.36,
+     1.54
+    ],
+    [
+     19.06,
+     27.58,
+     10.18
+    ]
+   ]
+  ]
+ },
+ "hover preview": "ran",
+ "import mmol": "ran",
+ "import mmol.classic_ray": "ran",
+ "import mmol.console_hint": "ran",
+ "import mmol.inspector": "ran",
+ "import mmol.keys": "ran",
+ "import mmol.mcp": "ran",
+ "import mmol.mcp.events": "ran",
+ "import mmol.mcp.mainthread": "ran",
+ "import mmol.mcp.server": "ran",
+ "import mmol.mcp.tools": "ran",
+ "import mmol.measure": "ran",
+ "import mmol.move": "ran",
+ "import mmol.movie": "ran",
+ "import mmol.pick": "ran",
+ "import mmol.pymolrc": "ran",
+ "import mmol.render_options": "ran",
+ "import mmol.scene_anim": "ran",
+ "import mmol.scenes": "ran",
+ "import mmol.sequence": "ran",
+ "import mmol.settings": "ran",
+ "import mmol.tmp": "ran",
+ "import mmol.tools": "ran",
+ "inspector poll": "ran",
+ "legacy module name in saved movies": "mmol.scene_anim",
+ "maps": {
+  "ccp4 round trip": [
+   -0.215,
+   5.0006,
+   0.0,
+   1.0001,
+   58993.0,
+   1773.0,
+   962.0,
+   648.0,
+   455.0,
+   369.0,
+   256.0,
+   209.0,
+   179.0,
+   180.0,
+   141.0,
+   136.0,
+   111.0,
+   100.0,
+   75.0,
+   57.0
+  ],
+  "doubled": [
+   -0.215,
+   4.1161,
+   0.0083,
+   0.8215,
+   439576.0,
+   16946.0,
+   9460.0,
+   6430.0,
+   4697.0,
+   3605.0,
+   2975.0,
+   2576.0,
+   2253.0,
+   2029.0,
+   1683.0,
+   1582.0,
+   1276.0,
+   1111.0,
+   910.0,
+   738.0
+  ],
+  "halved": [
+   -0.2586,
+   4.1792,
+   -0.0016,
+   0.8362,
+   55457.0,
+   2536.0,
+   1559.0,
+   1103.0,
+   765.0,
+   635.0,
+   492.0,
+   431.0,
+   325.0,
+   258.0,
+   251.0,
+   218.0,
+   203.0,
+   167.0,
+   129.0,
+   107.0
+  ],
+  "trimmed": [
+   [
+    -0.2586,
+    5.0563,
+    0.095,
+    0.9923,
+    10023.0,
+    700.0,
+    416.0,
+    268.0,
+    204.0,
+    137.0,
+    122.0,
+    109.0,
+    80.0,
+    55.0,
+    58.0,
+    46.0,
+    32.0,
+    36.0,
+    23.0,
+    11.0
+   ],
+   [
+    [
+     31.8145,
+     22.931,
+     -4.7465
+    ],
+    [
+     47.8145,
+     48.931,
+     21.2535
+    ]
+   ]
+  ]
+ },
+ "mcp tools": 7,
+ "movie": 10,
+ "pick": "ran",
+ "rename ramp": [
+  "1hpv",
+  "ramp2",
+  "sym01000000",
+  "sym02000000",
+  "sym03000000",
+  "sym04000000",
+  "sym05000000",
+  "sym03000001",
+  "sym02000100",
+  "sym05000100",
+  "sym01010000",
+  "sym04010000"
+ ],
+ "render options": "ran",
+ "scene exports": {
+  "idtf": [
+   5876939,
+   292283,
+   3436744965
+  ],
+  "obj": [
+   16617598,
+   500682,
+   3050526581
+  ],
+  "povray": [
+   38818168,
+   786831,
+   827357298
+  ],
+  "vrml1": [
+   278,
+   17,
+   672699936
+  ],
+  "vrml2": [
+   19646872,
+   787929,
+   3020343443
+  ]
+ },
+ "scenes": [
+  "s1",
+  "s2"
+ ],
+ "select": 162,
+ "sequence poll": "ran",
+ "session hooks": [
+  "mmol.scene_anim",
+  "mmol.scenes"
+ ],
+ "session round trip": {
+  "atoms": 3576,
+  "frames": 10,
+  "objects": [
+   "1hsg",
+   "1hvr",
+   "_align1",
+   "_align2",
+   "d1",
+   "a1",
+   "sele"
+  ],
+  "scenes": [
+   "s1",
+   "s2"
+  ]
+ },
+ "space group P212121": [
+  [
+   [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    1.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  [
+   [
+    -1.0,
+    0.0,
+    0.0,
+    0.5
+   ],
+   [
+    0.0,
+    -1.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    1.0,
+    0.5
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  [
+   [
+    1.0,
+    0.0,
+    0.0,
+    0.5
+   ],
+   [
+    0.0,
+    -1.0,
+    0.0,
+    0.5
+   ],
+   [
+    0.0,
+    0.0,
+    -1.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  [
+   [
+    -1.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    1.0,
+    0.0,
+    0.5
+   ],
+   [
+    0.0,
+    0.0,
+    -1.0,
+    0.5
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  ]
+ ],
+ "space group alias h32": "H 3 2",
+ "symexp": [
+  [
+   "sym01000000",
+   1631
+  ],
+  [
+   "sym01010000",
+   1631
+  ],
+  [
+   "sym02000000",
+   1631
+  ],
+  [
+   "sym02000100",
+   1631
+  ],
+  [
+   "sym03000000",
+   1631
+  ],
+  [
+   "sym03000001",
+   1631
+  ],
+  [
+   "sym04000000",
+   1631
+  ],
+  [
+   "sym04010000",
+   1631
+  ],
+  [
+   "sym05000000",
+   1631
+  ],
+  [
+   "sym05000100",
+   1631
+  ]
+ ],
+ "symmetry": [
+  63.4,
+  63.4,
+  83.8,
+  90.0,
+  90.0,
+  120.0,
+  "P 61"
+ ]
+}

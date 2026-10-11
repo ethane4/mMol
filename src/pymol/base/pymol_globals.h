@@ -1,0 +1,205 @@
+
+
+/*
+A* -------------------------------------------------------------------
+B* This file contains source code for the PyMOL computer program
+C* Copyright (c) Schrodinger, LLC.
+D* -------------------------------------------------------------------
+E* It is unlawful to modify or remove this copyright notice.
+F* -------------------------------------------------------------------
+G* Please see the accompanying LICENSE file for further information.
+H* -------------------------------------------------------------------
+I* Additional authors of this source file include:
+-*
+-*
+-*
+Z* -------------------------------------------------------------------
+*/
+#ifndef _H_PyMOLGlobals
+#define _H_PyMOLGlobals
+
+namespace pymol {
+class cif_file;
+class cif_data;
+class Renderer;
+};  // namespace pymol
+
+/* retina scale factor for ortho gui */
+extern int _gScaleFactor;
+inline int DIP2PIXEL(int v) { return v * _gScaleFactor; }
+inline float DIP2PIXEL(float v) { return v * _gScaleFactor; }
+
+/* all of the private singleton classes associated with a PyMOL instance */
+
+/* this gets included in virtually every PyMOL source file, so keep it
+   short and sweet */
+
+typedef int lexidx_t;
+typedef int lexborrow_t;
+
+constexpr unsigned int OrthoLineLength = 1024u;
+using OrthoLineType = char[OrthoLineLength];
+
+constexpr unsigned int WordLength = 256u;
+using WordType = char[WordLength];
+
+using SelectorID_t = int;
+using SelectorMemberOffset_t = int;
+
+using StateIndex_t = int;        ///< 0-based state index (C/C++/JavaScript)
+using StateIndexPython_t = int;  ///< 1-based state index (Python/Settings)
+
+constexpr StateIndex_t cStateAll = -1;
+constexpr StateIndex_t cStateCurrent = -2;
+
+typedef struct _CMemoryCache CMemoryCache;
+struct CIsosurf;
+typedef struct _CTetsurf CTetsurf;
+typedef struct _CSphere CSphere;
+class CFeedback;
+typedef struct _CUtil CUtil;
+struct CColor;
+struct CMovie;
+struct CControl;
+struct CButMode;
+class COrtho;
+typedef struct _CWord CWord;
+struct CCGORenderer;
+typedef struct _CCharacter CCharacter;
+struct CPop;
+class CScene;
+struct CSeq;
+struct CSetting;
+struct CSettingUnique;
+struct CText;
+struct CWizard;
+struct CAtomInfo;
+typedef struct _CSculptCache CSculptCache;
+typedef struct _CVFont CVFont;
+typedef struct _CEditor CEditor;
+struct CExecutive;
+struct CSeeker;
+struct CSelector;
+struct CSelectorManager;
+struct CTexture;
+typedef struct _CType CType;
+typedef struct _CMain CMain;
+struct CPlugIOManager;
+struct COpenVR;
+struct CPropertyUnique;
+struct ObjectMolecule;
+
+class CShaderMgr;
+class CMovieScenes;
+
+typedef struct _CP_inst CP_inst;
+
+struct OVLexicon;
+
+struct CPyMOLOptions;
+
+typedef struct _OVContext OVContext;
+
+struct CPyMOL;
+
+class CGO;
+
+class GFXManager;
+
+#define cPyMOLGlobals_LaunchStatus_StereoFailed 0x1
+#define cPyMOLGlobals_LaunchStatus_MultisampleFailed 0x2
+
+struct PyMOLGlobals {
+  /* singleton objects */
+
+  CMemoryCache* MemoryCache; /* could probably eliminate this... */
+  CIsosurf* Isosurf;
+  CTetsurf* Tetsurf;
+  CSphere* Sphere;
+  CFeedback* Feedback;
+  CUtil* Util;
+  CColor* Color;
+  CMovie* Movie;
+  CControl* Control;
+  CButMode* ButMode;
+  COrtho* Ortho;
+  CWord* Word;
+  CCGORenderer* CGORenderer;
+  CCharacter* Character;
+  CPop* Pop;
+  CScene* Scene;
+  CGO* DebugCGO; /* for debugging rendering */
+  CSeq* Seq;
+  CSetting *Setting, *Default;
+  CSettingUnique* SettingUnique;
+  CPropertyUnique* PropertyUnique;
+  CText* Text;
+  CWizard* Wizard;
+  CAtomInfo* AtomInfo;
+  CSculptCache* SculptCache;
+  CVFont* VFont;
+  CEditor* Editor;
+  CExecutive* Executive;
+  CSeeker* Seeker;
+  CSelectorManager* SelectorMgr;
+  CSelector* Selector;
+  CTexture* Texture;
+  CType* Type;
+  OVContext* Context;
+  CMain* Main; /* host/platform-specific "main" code */
+  CPyMOLOptions* Option;
+  CPyMOL* PyMOL;      /* the instance */
+  OVLexicon* Lexicon; /* lexicon for data (e.g. label) strings */
+  CPlugIOManager* PlugIOManager;
+  CShaderMgr* ShaderMgr;
+  COpenVR* OpenVR;
+  GFXManager* GFXMgr;
+  pymol::Renderer* Renderer = nullptr;
+  CP_inst* P_inst;
+
+  /* global variables */
+
+  int HaveGUI; /* do we have an OpenGL graphics window or are we
+                * command-line only? */
+
+  int ValidContext; /* are we guaranteed to have a valid OpenGL
+                     * context at this exact moment? */
+
+  int Ready; /* is the program fully initialized and ready to receive
+              * messages? */
+
+  int Interrupt; /* set when we are attempting to abort time-consuming
+                    calculations */
+
+  int Terminating; /* is the program shutting down? */
+
+  /* note that the following four options are also contained in
+   * PyMOLOption global -- they exist here as independent globals only
+   * because changes haven't yet been made throughout code */
+
+  int StereoCapable; /* the current graphics context quad buffered? */
+
+  int LaunchStatus; /* to enable deferred output regarding launch status */
+
+  int Security; /* do we warn before potentially executing any
+                 * Python code and ask for their informed consent? */
+
+  int DragDirtyFlag; /* do we need an extra callback to handle a mouse drag? */
+
+  // user defined scenes
+  CMovieScenes* scenes;
+
+  struct {
+    lexidx_t
+#include "pymol/base/lex_constants.h"
+        _;
+  } lex_const;
+};
+
+/* if we're running PyMOL as a global singleton (old way / backward
+   compatible) then this global variable will contain a pointer to
+   PyMOL global state variables */
+
+extern PyMOLGlobals* SingletonPyMOLGlobals;
+
+#endif

@@ -1,0 +1,9 @@
+# Pure file moves and renames, skipped by `git blame`.
+# Use with: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# C++ core reorganized under src/
+b434b598b728998f161a8df6510fb2543e113b58
+# App modules moved into modules/mmol
+fad1773079a6cb6b16a7cb54bee067d2ec888d2d
+# Format the files earlier edits left unformatted
+f4b14a8b07b3769714304c350548d4c96b2e88e5
