@@ -46,9 +46,9 @@ ray tracer.
 
 ## Install mMol
 
-1.  Download `mMol-<version>.dmg` from the Releases page.
+1.  Download `mMol-<version>.dmg` from the [Releases page](https://ethane4.com/mmol).
 2.  Open it and drag **mMol** into **Applications**.
-3.  The first time, right-click **mMol** and choose **Open**, then confirm.
+3.  Right-click **mMol** and choose **Open**, then confirm.
 
 mMol needs macOS 14 (Sonoma) or newer on Apple silicon. The app bundles its own
 Python 3.13, NumPy and Biopython, so it needs nothing else installed. Typing
@@ -59,7 +59,7 @@ Python 3.13, NumPy and Biopython, so it needs nothing else installed. Typing
 ## Quick start
 
 ```text
-fetch 4hhb                    # type=assembly for the biological unit
+fetch 4hhb                    # type=assembly for biological unit
 hide everything
 show cartoon
 util.cbc                      # color by chain
@@ -70,7 +70,7 @@ png ~/Desktop/4hhb.png
 ```
 
 Files also open when you drag them onto the window or choose **File > Open**:
-PDB, mmCIF, SDF, MOL, MOL2, PSE sessions, CCP4, MRC and DX maps, and more.
+PDB, mmCIF, SDF, MOL, MOL2, PSE sessions, CCP4, MRC and DX maps, etc.
 
 ### Example config file
 
