@@ -819,17 +819,21 @@ private struct ClassicNameCell: View {
   let toggle: () -> Void
 
   var body: some View {
-    Text(text)
-      .font(ClassicUI.font.weight(bold ? .semibold : .regular))
-      .foregroundColor(.white)
-      .lineLimit(1)
-      .truncationMode(.tail)
-      .padding(.horizontal, 3)
-      .frame(maxWidth: .infinity, maxHeight: kClassicBtnH, alignment: .leading)
-      .background(ClassicBevel(fill: enabled ? ClassicUI.nameEnabled : ClassicUI.nameDisabled))
-      .contentShape(Rectangle())
-      .onTapGesture(perform: toggle)
-      .help(text)
+    Button(action: toggle) {
+      Text(text)
+        .font(ClassicUI.font.weight(bold ? .semibold : .regular))
+        .foregroundColor(.white)
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .padding(.horizontal, 3)
+        .frame(maxWidth: .infinity, maxHeight: kClassicBtnH, alignment: .leading)
+        .background(
+          ClassicBevel(fill: enabled ? ClassicUI.nameEnabled : ClassicUI.nameDisabled)
+        )
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(ClassicPressStyle())
+    .help(text)
   }
 }
 
@@ -1464,12 +1468,20 @@ private struct ToggleSetting: View {
   // flip the switch (and its tint) back. Driving the switch from local @State
   // that changes ONLY on a user flip or a genuine polled-value change makes a
   // re-render with an unchanged value a no-op for the switch.
-  @State private var isOn = false
+  @State private var isOn: Bool
+
+  // Seeded from the value (not set in onAppear), so an opening card shows each
+  // switch in place instead of animating it from off to on.
+  init(value: Double, onToggle: @escaping (Bool) -> Void) {
+    self.value = value
+    self.onToggle = onToggle
+    _isOn = State(initialValue: value > 0.5)
+  }
+
   var body: some View {
     Toggle("", isOn: $isOn)
       .labelsHidden()
       .toggleStyle(ClassicSwitchStyle())
-      .onAppear { isOn = value > 0.5 }
       .onChange(of: value) { v in
         let want = v > 0.5
         if want != isOn { isOn = want }  // adopt real external changes
@@ -1620,17 +1632,10 @@ private struct ObjectCard: View {
   // Reps hidden via the Visible toggle but kept listed as layers.
   private var keptHidden: Set<String> { engine.keptHidden[entry.name] ?? [] }
   // Layers shown in the inspector = shown ∪ kept-hidden, in catalog order.
-  /// Cartoon (or the object's first rep when it has none), plus the reps the
-  /// user has since turned on (engine.cardReps); waters and ligands shown at
-  /// load don't each get a tab.
+  /// Every rep the object draws (e.g. cartoon for the protein and sticks for a
+  /// ligand), plus layers hidden with the Visible switch, in catalog order.
   private var listedReps: [String] {
-    let present = activeSet.union(keptHidden)
-    let primary =
-      present.contains("cartoon") ? "cartoon" : RepCatalog.order.first(where: activeSet.contains)
-    let added = engine.cardReps[entry.name] ?? []
-    return RepCatalog.order.filter {
-      present.contains($0) && ($0 == primary || added.contains($0) || keptHidden.contains($0))
-    }
+    RepCatalog.order.filter(activeSet.union(keptHidden).contains)
   }
   private var currentRep: String? {
     if let s = selectedRep, listedReps.contains(s) { return s }
@@ -1701,7 +1706,8 @@ private struct ObjectCard: View {
       // Right-click opens the action menu.
       .classicContextMenu { classicActionItems(for: entry, engine: engine) }
 
-      if expanded {
+      // Drawn once its first poll is in, so it never shows an empty card first.
+      if expanded, engine.objectDetails[entry.name] != nil {
         VStack(spacing: 3) {
           // Multi-state objects (NMR models / trajectory frames) get a
           // STATE row: pin this object to a state independent of the
@@ -1910,8 +1916,9 @@ private struct ObjectCard: View {
       inspectorLabel("Visible")
       ToggleSetting(value: shown ? 1 : 0) { on in
         if on {
+          // Stays in keptHidden: until the next poll reports it shown, that is
+          // what keeps this tab listed (and selected) instead of jumping away.
           engine.runCommand("show \(rep), \(entry.name)", naming: entry.name)
-          engine.keptHidden[entry.name]?.remove(rep)
         } else {
           engine.runCommand("hide \(rep), \(entry.name)", naming: entry.name)
           engine.keptHidden[entry.name, default: []].insert(rep)

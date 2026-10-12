@@ -39,27 +39,39 @@ struct ClassicButtonStyle: ButtonStyle {
   }
 }
 
+/// Keeps a control's own look but dims it on mouse-down, so custom controls answer
+/// the press at once (an `onTapGesture` only reacts on release).
+struct ClassicPressStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.brightness(configuration.isPressed ? -0.12 : 0)
+  }
+}
+
 /// A square bevelled checkbox, filled with the accent when on.
 struct ClassicToggleStyle: ToggleStyle {
   func makeBody(configuration: Configuration) -> some View {
-    HStack(spacing: 6) {
-      ClassicBevel(
-        fill: configuration.isOn ? ClassicUI.toggleA : Color(white: 0.16),
-        light: configuration.isOn ? ClassicUI.toggleLight : ClassicUI.darkEdge,
-        dark: configuration.isOn ? ClassicUI.toggleDark : ClassicUI.lightEdge
-      )
-      .frame(width: 13, height: 13)
-      .overlay {
-        if configuration.isOn {
-          Image(systemName: "checkmark").font(.system(size: 8, weight: .black)).foregroundColor(
-            .white)
+    Button {
+      configuration.isOn.toggle()
+    } label: {
+      HStack(spacing: 6) {
+        ClassicBevel(
+          fill: configuration.isOn ? ClassicUI.toggleA : Color(white: 0.16),
+          light: configuration.isOn ? ClassicUI.toggleLight : ClassicUI.darkEdge,
+          dark: configuration.isOn ? ClassicUI.toggleDark : ClassicUI.lightEdge
+        )
+        .frame(width: 13, height: 13)
+        .overlay {
+          if configuration.isOn {
+            Image(systemName: "checkmark").font(.system(size: 8, weight: .black))
+              .foregroundColor(.white)
+          }
         }
+        configuration.label.font(.system(size: 12))
+        Spacer(minLength: 0)
       }
-      configuration.label.font(.system(size: 12))
-      Spacer(minLength: 0)
+      .contentShape(Rectangle())
     }
-    .contentShape(Rectangle())
-    .onTapGesture { configuration.isOn.toggle() }
+    .buttonStyle(ClassicPressStyle())
   }
 }
 
@@ -69,18 +81,22 @@ struct ClassicSwitchStyle: ToggleStyle {
   func makeBody(configuration: Configuration) -> some View {
     HStack(spacing: 6) {
       configuration.label.font(.system(size: 12))
-      ZStack(alignment: configuration.isOn ? .trailing : .leading) {
-        ClassicBevel(
-          fill: configuration.isOn ? ClassicUI.toggleA : Color(white: 0.12),
-          light: ClassicUI.darkEdge, dark: ClassicUI.lightEdge
-        )
-        .frame(width: 26, height: 12)
-        ClassicBevel(fill: Color(white: 0.62)).frame(width: 12, height: 14)
+      Button {
+        configuration.isOn.toggle()
+      } label: {
+        ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+          ClassicBevel(
+            fill: configuration.isOn ? ClassicUI.toggleA : Color(white: 0.12),
+            light: ClassicUI.darkEdge, dark: ClassicUI.lightEdge
+          )
+          .frame(width: 26, height: 12)
+          ClassicBevel(fill: Color(white: 0.62)).frame(width: 12, height: 14)
+        }
+        .frame(width: 26, height: 14)
+        .animation(.easeOut(duration: 0.1), value: configuration.isOn)
+        .contentShape(Rectangle())
       }
-      .frame(width: 26, height: 14)
-      .animation(.easeOut(duration: 0.1), value: configuration.isOn)
-      .contentShape(Rectangle())
-      .onTapGesture { configuration.isOn.toggle() }
+      .buttonStyle(ClassicPressStyle())
     }
   }
 }

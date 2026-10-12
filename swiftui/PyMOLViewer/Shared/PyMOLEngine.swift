@@ -316,11 +316,6 @@ final class PyMOLEngine: ObservableObject {
   // actions (hide keeps, show/delete removes) — never by the detail poll — so
   // there's no re-add race with the ~500ms poll.
   @Published var keptHidden: [String: Set<String>] = [:]
-  /// Reps the user turned on per object (by command, menu, or while its card
-  /// was open): the card lists these beyond cartoon. lastShownReps spots reps
-  /// that appear while a card is open.
-  @Published var cardReps: [String: Set<String>] = [:]
-  private var lastShownReps: [String: Set<String>] = [:]
   private var detailRefresh: DispatchWorkItem?
 
   // The .pse session file the user currently has open (Finder open / drag-drop /
@@ -630,7 +625,6 @@ final class PyMOLEngine: ObservableObject {
   // heavy-dispatch path.
   private func runCommandCore(_ command: String) {
     PyMOLBridge_RunCommand(command)
-    noteShownReps(command)
     clearRepColors(after: command)
     // The open card reflects the change now, not at the next ~500 ms poll.
     if expandedDetail != nil {
@@ -657,29 +651,6 @@ final class PyMOLEngine: ObservableObject {
       || l.hasPrefix("unset all_states")
     {
       requestViewportRedraw()
-    }
-  }
-
-  /// `show <rep>[, sel]` / `as <rep>[, sel]`: list that rep on the cards of the
-  /// objects named in sel (all objects when it names none).
-  private func noteShownReps(_ command: String) {
-    let names = objects.filter { !$0.isSelection }.map(\.name)
-    for stmt in command.split(whereSeparator: { $0 == "\n" || $0 == ";" }) {
-      let words = stmt.trimmingCharacters(in: .whitespaces)
-        .split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-      let head = words.first?.split(separator: " ", maxSplits: 1).map(String.init) ?? []
-      guard head.count == 2, head[0] == "show" || head[0] == "as",
-        RepCatalog.order.contains(head[1])
-      else { continue }
-      let sel = words.count > 1 ? words[1] : ""
-      let tokens = Set(
-        sel.split(whereSeparator: {
-          !($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" || $0 == ".")
-        }).map(String.init))
-      // Names typed in sel count even before the object list has caught up
-      // (e.g. right after a fetch); stray words only add unused keys.
-      let hit = names.filter(tokens.contains)
-      for n in (hit.isEmpty ? names : hit) + tokens { cardReps[n, default: []].insert(head[1]) }
     }
   }
 
@@ -1789,6 +1760,9 @@ final class PyMOLEngine: ObservableObject {
   // build can starve the timer and the card lingers on "No representations").
   func refreshExpandedDetail() {
     pollDetails()
+    // The poll is synchronous: read its result now rather than at the next 100 ms
+    // feedback tick, so an opening card draws once, with its data.
+    parseObjectDetailFeedback("")
   }
 
   private func pollDetails() {
@@ -1898,14 +1872,6 @@ final class PyMOLEngine: ObservableObject {
       // the time; re-publishing unchanged values re-renders the inspector
       // and resets any open menu to the top. Only assign on real changes.
       if self.objectDetails != details { self.objectDetails = details }
-      // Reps that appeared while the card was open (scripts, MCP…) get a tab.
-      for (obj, reps) in details {
-        let shown = Set(reps.map(\.rep))
-        if let prev = self.lastShownReps[obj], !shown.subtracting(prev).isEmpty {
-          self.cardReps[obj, default: []].formUnion(shown.subtracting(prev))
-        }
-        self.lastShownReps[obj] = shown
-      }
       if self.sceneState != scene { self.sceneState = scene }
       if self.objectMeta != meta { self.objectMeta = meta }
       if self.sceneNames != scenes { self.sceneNames = scenes }

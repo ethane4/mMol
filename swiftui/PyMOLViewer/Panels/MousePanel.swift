@@ -28,6 +28,25 @@ private let actionCodes: [String: String] = [
   "rotd": "RotD", "movd": "MovD", "mvdz": "MvDZ",
 ]
 
+/// Tooltips for the legend's codes and row labels; codes not listed get none.
+private let legendHelp: [String: String] = [
+  "Rota": "Rotate the view", "Move": "Move the view", "MovZ": "Move closer or farther (zoom)",
+  "Clip": "Move the clipping planes", "RotZ": "Rotate about the screen axis",
+  "ClpN": "Move the near clipping plane", "ClpF": "Move the far clipping plane",
+  "PkAt": "Pick an atom", "PkBd": "Pick a bond", "PkTB": "Pick a torsion bond",
+  "Pk1": "Pick atom pk1", "RotF": "Rotate a fragment", "TorF": "Twist a fragment's torsion",
+  "MovF": "Move a fragment", "MovA": "Move an atom", "MovO": "Move an object",
+  "RotO": "Rotate an object", "MvOZ": "Move an object closer or farther",
+  "Orig": "Set the rotation origin", "Cent": "Center on the clicked atom",
+  "Slab": "Change the slab thickness", "MovS": "Move the slab",
+  "MvSZ": "Move the slab and zoom", "Menu": "Open the context menu", "Sele": "Select",
+  "+/-": "Toggle in the selection", "+Box": "Add a box of atoms to the selection",
+  "-Box": "Remove a box of atoms from the selection", "--": "No action",
+  "Buttons": "Left, middle and right mouse buttons, and the scroll wheel",
+  "& Keys": "No modifier key held", "Shft": "With Shift held", "Ctrl": "With Control held",
+  "CtSh": "With Control and Shift held", "Clik": "A single click",
+]
+
 /// A single mouse button/modifier binding: (button, modifier, action).
 private typealias Binding = (btn: String, mod: String, act: String)
 
@@ -307,12 +326,14 @@ private struct ClassicMouseLegend: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 6) {
-        t("Mouse Mode", ClassicUI.legendGreen)
-        t(modeName, ClassicUI.legendRed)
+      Button(action: cycleMode) {
+        HStack(spacing: 6) {
+          t("Mouse Mode", ClassicUI.legendGreen)
+          t(modeName, ClassicUI.legendRed)
+        }
+        .contentShape(Rectangle())
       }
-      .contentShape(Rectangle())
-      .onTapGesture(perform: cycleMode)
+      .buttonStyle(ClassicPressStyle())
       .help("Click to switch mouse mode")
 
       if isTrackpad {
@@ -332,12 +353,14 @@ private struct ClassicMouseLegend: View {
         row("Clik", ["Sele", "Cent", "Menu"])
       }
 
-      HStack(spacing: 6) {
-        t("Selecting", ClassicUI.legendGreen)
-        t(selectionMode, ClassicUI.legendRed)
+      Button(action: cycleSelection) {
+        HStack(spacing: 6) {
+          t("Selecting", ClassicUI.legendGreen)
+          t(selectionMode, ClassicUI.legendRed)
+        }
+        .contentShape(Rectangle())
       }
-      .contentShape(Rectangle())
-      .onTapGesture(perform: cycleSelection)
+      .buttonStyle(ClassicPressStyle())
       .help("Click to change what a click selects")
 
       HStack(spacing: 6) {
@@ -365,10 +388,12 @@ private struct ClassicMouseLegend: View {
   ) -> some View {
     HStack(spacing: 0) {
       t(label, labelColor).frame(width: labelW, alignment: .trailing)
+        .help(legendHelp[label] ?? "")
       ForEach(Array(cells.enumerated()), id: \.offset) { _, c in
         t(c, cellColor)
           .frame(width: wide ? nil : cellW, alignment: wide ? .leading : .center)
           .padding(.leading, wide ? 6 : 0)
+          .help(legendHelp[c.trimmingCharacters(in: .whitespaces)] ?? "")
       }
     }
   }

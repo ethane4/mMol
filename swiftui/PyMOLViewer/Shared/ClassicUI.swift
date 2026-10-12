@@ -163,32 +163,32 @@ struct ClassicButtonGrid: View {
   var body: some View {
     VStack(spacing: 4) {
       HStack(spacing: 4) {
-        button("Reset") { run("reset") }
-        button("Zoom") { run("zoom animate=1") }
-        button("Orient") { run("orient animate=1") }
-        button("Draw/Ray") {
+        button("Reset", "Reset the camera to the default view") { run("reset") }
+        button("Zoom", "Zoom to fit everything") { run("zoom animate=1") }
+        button("Orient", "Turn and zoom to the molecule's best view") { run("orient animate=1") }
+        button("Draw/Ray", "Ray trace the view and export the image") {
           NotificationCenter.default.post(name: .mmolExportImage, object: nil)
         }
       }
       HStack(spacing: 4) {
-        button("Unpick") { run("unpick") }
-        button("Deselect") { run("deselect") }
-        button("Rock") { run("rock") }
-        button("Get View") { run("get_view") }
+        button("Unpick", "Clear the picked atoms (pk1–pk4)") { run("unpick") }
+        button("Deselect", "Deactivate the current selection") { run("deselect") }
+        button("Rock", "Start or stop rocking the view") { run("rock") }
+        button("Get View", "Print the camera matrix to the console") { run("get_view") }
       }
       HStack(spacing: 4) {
-        button("|<") { run("rewind") }
-        button("<") { run("backward") }
-        button("Stop") { run("mstop") }
-        button("Play") { run("mplay") }
-        button(">") { run("forward") }
-        button(">|") { run("ending") }
-        button("MClear") { run("mclear") }
+        button("|<", "Rewind to the first frame") { run("rewind") }
+        button("<", "Step back one frame") { run("backward") }
+        button("Stop", "Stop the movie") { run("mstop") }
+        button("Play", "Play the movie") { run("mplay") }
+        button(">", "Step forward one frame") { run("forward") }
+        button(">|", "Go to the last frame") { run("ending") }
+        button("MClear", "Clear the movie") { run("mclear") }
       }
-      button("Rebuild") { run("rebuild") }
+      button("Rebuild", "Rebuild all representations") { run("rebuild") }
       HStack(spacing: 4) {
-        button("Undo") { run("undo") }
-        button("Redo") { run("redo") }
+        button("Undo", "Undo the last change (⌘Z)") { run("undo") }
+        button("Redo", "Redo (⇧⌘Z)") { run("redo") }
       }
       Spacer(minLength: 0)
     }
@@ -197,8 +197,10 @@ struct ClassicButtonGrid: View {
     .background(ClassicUI.panelBg)
   }
 
-  private func button(_ title: String, action: @escaping () -> Void) -> some View {
-    Button(title, action: action).buttonStyle(ClassicGridButtonStyle())
+  private func button(_ title: String, _ help: String, action: @escaping () -> Void)
+    -> some View
+  {
+    Button(title, action: action).buttonStyle(ClassicGridButtonStyle()).help(help)
   }
 
   private func run(_ cmd: String) { engine.runCommand(cmd) }
@@ -305,35 +307,52 @@ struct ClassicRayOverlay: View {
 /// play, forward, end, S (sequence viewer), ▼ (rock), F (full screen).
 struct ClassicTransportBar: View {
   @EnvironmentObject var engine: PyMOLEngine
+  @EnvironmentObject private var playback: PlaybackState
 
   var body: some View {
     HStack(spacing: 1) {
-      cell(Image(systemName: "backward.end.fill")) { engine.runCommand("rewind") }
-      cell(Image(systemName: "arrowtriangle.left.fill")) { engine.runCommand("backward") }
-      cell(Image(systemName: "stop.fill")) { engine.runCommand("mstop") }
-      cell(Image(systemName: "play.fill")) {
-        engine.runCommand(engine.playback.isPlaying ? "mstop" : "mplay")
+      cell(Image(systemName: "backward.end.fill"), "Rewind") { engine.runCommand("rewind") }
+      cell(Image(systemName: "arrowtriangle.left.fill"), "Step back") {
+        engine.runCommand("backward")
       }
-      cell(Image(systemName: "arrowtriangle.right.fill")) { engine.runCommand("forward") }
-      cell(Image(systemName: "forward.end.fill")) { engine.runCommand("ending") }
-      cell(Text("S").font(ClassicUI.font)) { engine.sequenceVisible.toggle() }
-      cell(Image(systemName: "arrowtriangle.down.fill")) { engine.runCommand("rock") }
-      cell(Text("F").font(ClassicUI.font)) { NSApp.keyWindow?.toggleFullScreen(nil) }
+      cell(Image(systemName: "stop.fill"), "Stop") { engine.runCommand("mstop") }
+      cell(
+        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill"),
+        playback.isPlaying ? "Pause" : "Play"
+      ) {
+        engine.runCommand(playback.isPlaying ? "mstop" : "mplay")
+      }
+      cell(Image(systemName: "arrowtriangle.right.fill"), "Step forward") {
+        engine.runCommand("forward")
+      }
+      cell(Image(systemName: "forward.end.fill"), "Go to end") { engine.runCommand("ending") }
+      cell(Text("S").font(ClassicUI.font), "Show or hide the sequence") {
+        engine.sequenceVisible.toggle()
+      }
+      cell(Image(systemName: "arrowtriangle.down.fill"), "Rock") { engine.runCommand("rock") }
+      cell(Text("F").font(ClassicUI.font), "Full screen") {
+        NSApp.keyWindow?.toggleFullScreen(nil)
+      }
     }
     .frame(height: 22)
     .padding(.horizontal, 2)
     .background(ClassicUI.panelBg)
   }
 
-  private func cell<L: View>(_ label: L, action: @escaping () -> Void) -> some View {
+  // The darker bevel keeps PyMOL's red glyphs at ~3:1 contrast (0.5 grey was ~1.2:1).
+  private func cell<L: View>(_ label: L, _ name: String, action: @escaping () -> Void)
+    -> some View
+  {
     Button(action: action) {
       label
         .font(.system(size: 10, weight: .bold))
         .foregroundColor(Color(.sRGB, red: 1.0, green: 0.25, blue: 0.25, opacity: 1))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ClassicBevel(fill: ClassicUI.nameEnabled))
+        .background(ClassicBevel(fill: ClassicUI.nameDisabled))
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .help(name)
+    .accessibilityLabel(name)
   }
 }

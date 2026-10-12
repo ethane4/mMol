@@ -146,7 +146,7 @@ targets:
         # App icon: Resources/Assets.xcassets/AppIcon (from swiftui/classic/mmol_icon.png).
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_GENERATION_MODE: GeneratedFile
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.1.0"
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
         # User-facing app brand. PRODUCT_NAME = mMol → the bundle is mMol.app

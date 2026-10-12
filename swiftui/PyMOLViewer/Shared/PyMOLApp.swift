@@ -86,6 +86,14 @@ struct PyMOLApp: App {
   // Native menus. File: Open / Fetch / Save / Export. Connect: MCP server
   // control. Buttons post notifications ContentView observes (reusing the
   // toolbar's open/save/export logic).
+  private func undoOrForward(_ cmd: String) {
+    if NSApp.keyWindow?.firstResponder is NSText {
+      NSApp.sendAction(Selector(("\(cmd):")), to: nil, from: nil)
+    } else {
+      engine.runCommand(cmd)
+    }
+  }
+
   @CommandsBuilder private var macCommands: some Commands {
     CommandGroup(after: .newItem) {
       Button("Open…") {
@@ -147,6 +155,16 @@ struct PyMOLApp: App {
     // @CommandsBuilder takes at most 10 children; past that, wrap menus
     // in a `Group`.
     Group {
+      // ⌘Z / ⇧⌘Z: PyMOL's undo, except in a text field, which undoes its own typing.
+      CommandGroup(replacing: .undoRedo) {
+        Button("Undo") { undoOrForward("undo") }.keyboardShortcut("z", modifiers: .command)
+        Button("Redo") { undoOrForward("redo") }
+          .keyboardShortcut("z", modifiers: [.command, .shift])
+      }
+      CommandGroup(replacing: .appSettings) {
+        Button("Settings…") { engine.openTool(.settings) }
+          .keyboardShortcut(",", modifiers: .command)
+      }
       // Display — desktop PyMOL 2.5's menu of that name.
       CommandMenu("Display") {
         Toggle(
