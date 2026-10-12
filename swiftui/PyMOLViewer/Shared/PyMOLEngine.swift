@@ -60,6 +60,9 @@ final class ConsoleLog: ObservableObject {
     }
   }
   private(set) var trimmed = 0
+
+  /// Empties the log (the `clear` command).
+  func clear() { lines = [] }
 }
 
 final class PyMOLEngine: ObservableObject {
@@ -2522,7 +2525,10 @@ final class PyMOLEngine: ObservableObject {
     // so the payload can't overflow the ~1KB feedback-line cap (#231).
     // Quiet: a poll must not cost a re-render of a static scene.
     objectPollEpoch = objectListEpoch
-    runPythonQuiet("from mmol import inspector as _ai\n_ai.poll_panel()")
+    // The undo snapshot of a settled change rides on the same quiet poll, so
+    // it is taken after the screen has updated (mmol/undo.py).
+    runPythonQuiet(
+      "from mmol import inspector as _ai, undo as _undo\n_undo.checkpoint()\n_ai.poll_panel()")
 
     pollDetails()
     // Discover/refresh the timeline length + frame (cheap). Fast updates

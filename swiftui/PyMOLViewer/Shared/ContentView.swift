@@ -39,6 +39,11 @@ struct ContentView: View {
   /// are written once, on release.
   @State private var liveInspectorW: CGFloat? = nil
   @State private var liveConsoleH: CGFloat? = nil
+  /// The Claude terminal's dragged height (0 until the user drags its seam),
+  /// and its live height and drag anchor while they do.
+  @AppStorage(PanelLayout.claudeHeightKey) private var claudeHeight = 0.0
+  @State private var liveClaudeH: CGFloat? = nil
+  @State private var claudeDragAnchor: CGFloat? = nil
 
   // "Fetch from PDB…" alert state (Open File… uses an NSOpenPanel directly).
   @State private var showMacFetch = false
@@ -215,7 +220,6 @@ struct ContentView: View {
     // source here: NSWindow isn't on screen yet at first layout.
     GeometryReader { winGeo in
       VStack(spacing: 0) {
-        MCPDrivingBanner()
         classicMacBody(windowSize: winGeo.size)
       }
       .alert("Fetch from PDB", isPresented: $showMacFetch) {
@@ -256,8 +260,22 @@ struct ContentView: View {
         } else {
           ToolbarItem(placement: .navigation) { classicTabStrip }
         }
-        ToolbarItem(placement: .primaryAction) {
-          MCPStatusView()
+        // The MCP button, and left of it, while Claude drives the session,
+        // its indicator. Both draw their own classic face, so they go without
+        // the glass capsule, and sit in the toolbar so they never move the
+        // window's content.
+        if #available(macOS 26.0, *) {
+          if mcpManager.activeTool {
+            ToolbarItem(placement: .primaryAction) { MCPDrivingIndicator() }
+              .sharedBackgroundVisibility(.hidden)
+          }
+          ToolbarItem(placement: .primaryAction) { MCPStatusView() }
+            .sharedBackgroundVisibility(.hidden)
+        } else {
+          if mcpManager.activeTool {
+            ToolbarItem(placement: .primaryAction) { MCPDrivingIndicator() }
+          }
+          ToolbarItem(placement: .primaryAction) { MCPStatusView() }
         }
       }
       // Native File-menu commands → reuse the same actions as the folder menu.
@@ -530,22 +548,73 @@ struct ContentView: View {
   // classicMacBody stays within the type-checker's size limit — same pattern
   // as macViewport itself.
   @ViewBuilder private var macViewportStack: some View {
-    VStack(spacing: 0) {
-      macViewport
-        // `ray` result, until the core drops it.
-        .overlay {
-          if let ray = engine.classicRayImage { ClassicRayOverlay(ray: ray) }
+    if engine.activeTool == .claude {
+      // Measured so the Claude terminal fits inside the window: a fixed height
+      // pushed its last rows, where Claude Code's input line is, off the
+      // bottom. Only while it is open, so the usual layout is untouched.
+      GeometryReader { geo in
+        let claudeH =
+          liveClaudeH
+          ?? PanelLayout.claudePaneHeight(
+            stackHeight: geo.size.height, preferred: CGFloat(claudeHeight))
+        VStack(spacing: 0) {
+          viewportWithRay(
+            minHeight: min(
+              PanelLayout.macViewportMinHeight, max(0, geo.size.height - claudeH - 5)))
+          claudeDivider(stackHeight: geo.size.height, height: claudeH)
+          ClaudeTerminalView().frame(height: claudeH)
         }
-      // The timeline editor docks here while the Movie tab is active.
-      if engine.movieTabActive {
-        Divider()
-        TimelinePanel()
       }
-      if engine.activeTool == .claude {
-        Divider()
-        ClaudeTerminalView().frame(height: 340)
+    } else {
+      VStack(spacing: 0) {
+        viewportWithRay(minHeight: PanelLayout.macViewportMinHeight)
+        // The timeline editor docks here while the Movie tab is active.
+        if engine.movieTabActive {
+          Divider()
+          TimelinePanel()
+        }
       }
     }
+  }
+
+  /// The seam above the Claude terminal, doubling as the drag handle that
+  /// resizes it; the same recipe as macConsoleDivider. The dragged height is
+  /// kept in points, so the terminal stays the size the user chose.
+  private func claudeDivider(stackHeight: CGFloat, height: CGFloat) -> some View {
+    Rectangle()
+      .fill(hairlineColor)
+      .frame(height: 1)
+      .padding(.vertical, 2)
+      .contentShape(Rectangle())
+      .onHover { inside in
+        if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+      }
+      .gesture(
+        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+          .onChanged { v in
+            let start = claudeDragAnchor ?? height
+            claudeDragAnchor = start
+            engine.frozenDrawableGravity = .resizeAspect
+            engine.suppressDrawableResize = true
+            // Dragging the seam up makes the terminal taller.
+            liveClaudeH = PanelLayout.claudePaneHeight(
+              stackHeight: stackHeight, preferred: start - v.translation.height)
+          }
+          .onEnded { _ in
+            if let h = liveClaudeH { claudeHeight = Double(h) }
+            liveClaudeH = nil
+            claudeDragAnchor = nil
+            engine.suppressDrawableResize = false
+          }
+      )
+  }
+
+  /// The viewport with the last `ray` result over it, until the core drops it.
+  private func viewportWithRay(minHeight: CGFloat) -> some View {
+    macViewport(minHeight: minHeight)
+      .overlay {
+        if let ray = engine.classicRayImage { ClassicRayOverlay(ray: ray) }
+      }
   }
 
   // Shared by all three local key-down monitors below: a modal, sheet,
@@ -688,9 +757,9 @@ struct ContentView: View {
   // type-checker can resolve each in isolation (the inline chain tripped the
   // "unable to type-check in reasonable time" limit).
   @ViewBuilder
-  private var macViewport: some View {
+  private func macViewport(minHeight: CGFloat) -> some View {
     MetalViewport()
-      .frame(minWidth: 400, minHeight: 360)
+      .frame(minWidth: 400, minHeight: minHeight)
       .layoutPriority(1)
       .overlay(alignment: .top) {
         if engine.measureMode != nil {
@@ -1101,6 +1170,8 @@ struct ContentView: View {
       "from mmol import pymolrc as _mmolrc; "
         + "_mmolrc.load(); "
         + "from mmol import render_options as _ro; _ro.snapshot()")
+    // Undo and redo record changes from here on, not the startup script's.
+    engine.runPython("from mmol import undo as _undo; _undo.install()")
     engine.runPython(
       "from mmol import keys as _mmol_keys; "
         + "_mmol_keys.audit_shadowed()")

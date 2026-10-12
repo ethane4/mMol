@@ -33,10 +33,15 @@ enum PanelLayout {
   static let inspectorFracKey = ns + "inspectorFrac"
   /// Sequence strip visible. Written by PyMOLEngine, which owns the flag.
   static let sequenceVisibleKey = ns + "sequenceVisible"
+  /// The Claude terminal's height in points, once the user drags its seam.
+  /// Absent (0) until then, which selects the default.
+  static let claudeHeightKey = ns + "claudeHeight"
 
   /// Every key this type defines — the namespace/uniqueness check in the tests
   /// runs off this list, so a new key must be added here too.
-  static let allKeys: [String] = [consoleFracKey, inspectorFracKey, sequenceVisibleKey]
+  static let allKeys: [String] = [
+    consoleFracKey, inspectorFracKey, sequenceVisibleKey, claudeHeightKey,
+  ]
 
   // MARK: - Bounds
 
@@ -60,6 +65,28 @@ enum PanelLayout {
   /// is down to this, which is what keeps #317 ("drag it open to read a long
   /// log") working while still guaranteeing a viewport.
   static let macViewportMinHeight: CGFloat = 360
+
+  /// The Claude Code terminal docked under the viewport: its default height,
+  /// the least it shrinks to, and the viewport height a dragged size leaves.
+  static let claudePaneDefaultHeight: CGFloat = 340
+  static let claudePaneMinHeight: CGFloat = 150
+  static let claudeViewportFloor: CGFloat = 120
+
+  /// The docked Claude terminal's height in a viewport column `stackHeight`
+  /// points tall. Until the user drags its seam (`preferred` 0), the default
+  /// height, less in a short window so the viewport keeps its minimum; after,
+  /// their size, leaving the viewport at least `claudeViewportFloor`. Never
+  /// taller than the column: Claude Code draws its input line on the
+  /// terminal's last rows, so a pane that ran past the window's bottom edge
+  /// hid it.
+  static func claudePaneHeight(stackHeight: CGFloat, preferred: CGFloat = 0) -> CGFloat {
+    guard stackHeight.isFinite, stackHeight > 0 else { return claudePaneMinHeight }
+    let h =
+      preferred.isFinite && preferred > 0
+      ? min(preferred, stackHeight - claudeViewportFloor)
+      : min(claudePaneDefaultHeight, stackHeight - macViewportMinHeight)
+    return min(stackHeight, max(claudePaneMinHeight, h))
+  }
 
   /// #350: the macOS inspector column's width on a launch with nothing stored.
   /// ABSOLUTE points for the same reason as the console default — an untouched

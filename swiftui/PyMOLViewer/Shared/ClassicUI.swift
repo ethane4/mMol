@@ -127,18 +127,30 @@ struct ClassicBevel<Fill: View>: View {
   }
 }
 
+extension View {
+  /// The 2.5 button grid's flat dark Qt-style face, for buttons and menu
+  /// triggers alike. A larger `cornerRadius` rounds it off where it sits by
+  /// the window's own rounded corners.
+  func classicButtonFace(pressed: Bool = false, cornerRadius: CGFloat = 3) -> some View {
+    font(.system(size: 13))
+      .foregroundColor(Color(white: 0.92))
+      .lineLimit(1)
+      .background(Color(white: pressed ? 0.32 : 0.22))
+      .overlay(
+        RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(
+          Color(white: 0.38), lineWidth: 1)
+      )
+      .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+      .contentShape(Rectangle())
+  }
+}
+
 /// A flat dark Qt-style push button, as in the 2.5 button grid.
 private struct ClassicGridButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(.system(size: 13))
-      .foregroundColor(Color(white: 0.92))
-      .lineLimit(1)
       .frame(maxWidth: .infinity, minHeight: 22)
-      .background(Color(white: configuration.isPressed ? 0.32 : 0.22))
-      .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color(white: 0.38), lineWidth: 1))
-      .clipShape(RoundedRectangle(cornerRadius: 3))
-      .contentShape(Rectangle())
+      .classicButtonFace(pressed: configuration.isPressed)
   }
 }
 

@@ -145,6 +145,14 @@ struct CommandPanel: View {
 
     commandHistory.append(trimmed)
     historyIndex = commandHistory.count
+    if trimmed == "clear" || trimmed == "cls" {
+      // Empties this console only; the Claude terminal keeps its own output.
+      // (PyMOL's cls cleared just its internal buffer, which mMol doesn't show.)
+      engine.console.clear()
+      commandText = ""
+      hint = nil
+      return
+    }
     if trimmed == "claude" {  // Claude Code in a terminal tab (ClaudeTerminal.swift)
       engine.feedbackLog.append("mMol>claude")
       engine.openClaude()
