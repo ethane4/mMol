@@ -308,10 +308,9 @@ final class MovieExporter: ObservableObject {
     guard !overrides.isEmpty,
       let data = try? JSONSerialization.data(withJSONObject: overrides, options: [.sortedKeys])
     else { return }
-    let b64 = data.base64EncodedString()
     engine.runPython(
-      "import base64 as _b64\nfrom pymol import movie_exporting as _me\n"
-        + "_me.apply_overrides(_b64.b64decode('\(b64)').decode('utf-8'))")
+      "from pymol import movie_exporting as _me\n"
+        + "_me.apply_overrides(\(pyLiteral(String(decoding: data, as: UTF8.self))))")
     overridesApplied = true
   }
 

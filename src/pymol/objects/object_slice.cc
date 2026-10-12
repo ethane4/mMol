@@ -799,11 +799,6 @@ void ObjectSliceStateRenderRay(ObjectSlice* I, ObjectSliceState* oss,
   ray->transparentf(0.0);
 }
 
-void ObjectSliceRenderRasterImmediate(ObjectSlice* I, ObjectSliceState* oss,
-                                      RenderInfo* info, int state) {
-  // Immediate mode rendering removed; picking is handled via shaderCGO path.
-}
-
 /**
  * @brief Generates the Slice state's CGO for rendering
  * @param I slice object
@@ -937,7 +932,6 @@ void ObjectSlice::render(RenderInfo* info) {
   auto I = this;
   int state = info->state;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   const RenderPass pass = info->pass;
   auto alpha = GetObjectSliceAlpha(I->G, I);
   auto track_camera = IsTrackCameraEnabled(*I);
@@ -946,8 +940,6 @@ void ObjectSlice::render(RenderInfo* info) {
       !track_camera &&
       SettingGet<bool>(G, nullptr, I->Setting.get(), cSetting_use_shaders);
 
-  // just in case, since slice uses immediate mode, but this should never happen
-  G->ShaderMgr->Disable_Current_Shader();
   // TODO: Track camera on uses immediate mode OpenGL calls. Similar to Volume
   // slices, we could generate the slice geometry on the fly and upload them to
   // the GPU every frame from host-visible memory using the same indirect
@@ -967,15 +959,6 @@ void ObjectSlice::render(RenderInfo* info) {
       continue;
     }
     if (!(G->HaveGUI && G->ValidContext)) {
-      continue;
-    }
-    if (pick) {
-      if (oss->shaderCGO && (I->visRep & cRepSliceBit)) {
-        CGORenderPicking(oss->shaderCGO.get(), info, &I->context,
-                         I->Setting.get(), nullptr);
-      } else {
-        ObjectSliceRenderRasterImmediate(I, oss, info, state);
-      }
       continue;
     }
     int render_now = false;

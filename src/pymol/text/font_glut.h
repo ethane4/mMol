@@ -63,9 +63,6 @@ extern FontGLUTBitmapFontRec FontGLUTBitmapHelvetica18;
 struct CFontGLUT : public CFont {
   const FontGLUTBitmapFontRec* glutFont;
 
-  /* save fields */
-  int swapbytes, lsbfirst, rowlength;
-  int skiprows, skippixels, alignment;
   const char* RenderOpenGL(const RenderInfo* info, const char* text, float size,
                            const float* rpos, bool needSize, short relativeMode,
                            bool shouldRender, CGO* shaderCGO) override;

@@ -71,10 +71,6 @@ struct GridInfo {
   SceneUnitContext context; /* for whole-window display */
 };
 
-using PrepareViewportForStereoFuncT = void (*)(PyMOLGlobals*, CScene*, int,
-                                               bool, int, const Offset2D&,
-                                               const std::optional<Rect2D>&);
-
 class CScene : public Block {
  public:
   std::list<pymol::CObject*> Obj, GadgetObjs, NonGadgetObjs;
@@ -144,7 +140,6 @@ class CScene : public Block {
 
   std::vector<int> m_slots;
 
-  int StencilValid{}, StencilParity{};
   bool ReinterpolateFlag{};
   pymol::CObject* ReinterpolateObj{nullptr};
   pymol::CObject* MotionGrabbedObj{nullptr};
@@ -159,16 +154,7 @@ class CScene : public Block {
   int background_color_already_set{};
   int do_not_clear{};
   GridInfo grid{};
-  int last_grid_size{};
   int n_texture_refreshes{0};
-  CGO* offscreenCGO{nullptr};
-  CGO* offscreenOIT_CGO{nullptr};
-  CGO* offscreenOIT_CGO_copy{nullptr};
-  PrepareViewportForStereoFuncT vp_prepareViewPortForStereo = nullptr;
-  Offset2D vp_pos{};
-  std::optional<Rect2D> vp_oversize{};
-  int vp_times{}, vp_stereo_mode{};
-  float vp_width_scale{};
   PickColorManager pickmgr;
 
   CScene(PyMOLGlobals* G) : Block(G), m_ScrollBar(G, false) {}

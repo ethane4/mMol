@@ -68,10 +68,6 @@ class Box(Wizard):
         self.update_box()
         self.cmd.refresh_wizard()
 
-    def get_prompt(self):
-        self.prompt = []
-        return self.prompt
-
     def toggle_points(self):
         if self.points_name in self.cmd.get_names(enabled_only=1):
             self.cmd.disable(self.points_name)
@@ -79,7 +75,7 @@ class Box(Wizard):
             self.cmd.enable(self.points_name)
 
     def delete_box(self):
-        self.cmd.delete(self.point_name)
+        self.cmd.delete(self.points_name)
         self.cmd.delete(self.cgo_name)
 
     def edit_name(self, copying=0):

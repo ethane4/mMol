@@ -124,37 +124,17 @@ if True:
         from .checking import _raising
 
         #-------------------------------------------------------------------
-        # path expansion, including our fixes for Win32
-
-
-        def _nt_expandvars(path):  # allow for //share/folder$/file
-            path = nt_hidden_path_re.sub(r"$$\\", path)
-            return os.path.expandvars(path)
-
-        if "nt" in sys.builtin_module_names:
-            _expandvars = _nt_expandvars
-        else:
-            _expandvars = os.path.expandvars
+        # path expansion
 
         def exp_path(path):
-            path = as_pathstr(path)
-            return _expandvars(os.path.expanduser(path))
+            return os.path.expandvars(os.path.expanduser(path))
 
         def as_pathstr(path):
-            # On Windows, always work with unicode file names. On Unix,
-            # UTF-8 byte strings seem to be fine, so keep them for now.
-            if isinstance(path, bytes) and pymol.IS_WINDOWS:
-                for encoding in ('utf-8', 'mbcs'):
-                    try:
-                        return path.decode(encoding)
-                    except UnicodeError:
-                        pass
+            # UTF-8 byte strings are fine as paths on macOS; keep them.
             return path
 
         #--------------------------------------------------------------------
         # locks and threading
-
-        reaper = None
 
         # the following locks are used by both C and Python to insure that no more than
         # one active thread enters PyMOL at a given time.
@@ -204,7 +184,6 @@ if True:
         _object_update_spawn = internal._object_update_spawn
         _object_update_thread = internal._object_update_thread
         _quit = internal._quit
-        _ray_anti_spawn = internal._ray_anti_spawn
         _ray_hash_spawn = internal._ray_hash_spawn
         _ray_spawn = internal._ray_spawn
         _refresh = internal._refresh

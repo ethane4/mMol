@@ -211,7 +211,6 @@ void GadgetSet::render(RenderInfo* info) {
   GadgetSet* I = this;
   const RenderPass pass = info->pass;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   const float* color;
   PickContext context;
 
@@ -220,7 +219,7 @@ void GadgetSet::render(RenderInfo* info) {
 
   color = ColorGet(I->G, I->Obj->Color);
 
-  if (pass == RenderPass::Transparent || ray || pick) {
+  if (pass == RenderPass::Transparent || ray) {
     PyMOLGlobals* G = I->G;
 
     if (ray) {
@@ -237,66 +236,29 @@ void GadgetSet::render(RenderInfo* info) {
       }
     } else if (G->HaveGUI && G->ValidContext) {
       short use_shader = (short)SettingGetGlobal_b(I->G, cSetting_use_shaders);
-      if (pick) {
-        if (!I->PickCGO && I->PickShapeCGO) {
-          CGO* convertcgo;
-          int ok = true;
-          convertcgo = CGOCombineBeginEnd(I->PickShapeCGO, 0);
-          CHECKOK(ok, convertcgo);
-          if (ok) {
-            if (use_shader) {
-              CGO* tmpCGO;
-              tmpCGO = CGOOptimizeToVBOIndexedNoShader(convertcgo, 0);
-              I->PickCGO = CGONew(G);
-              CGODisable(I->PickCGO, GL_DEPTH_TEST);
-              CGOEnable(I->PickCGO, GL_RAMP_SHADER);
-              I->offsetPtOPick = CGOUniform3f(I->PickCGO, RAMP_OFFSETPT,
-                                              (const float*)I->Coord);
-              CGOAppendNoStop(I->PickCGO, tmpCGO);
-              CGOFreeWithoutVBOs(tmpCGO);
-              CGODisable(I->PickCGO, GL_RAMP_SHADER);
-              CGOEnable(I->PickCGO, GL_DEPTH_TEST);
-              CGOStop(I->PickCGO);
-              I->PickCGO->use_shader = true;
-              CGOFree(convertcgo);
-            } else {
-              I->PickCGO = convertcgo;
-            }
-          } else {
-            CGOFree(convertcgo);
-          }
+      if (!I->StdCGO && I->ShapeCGO) {
+        if (!use_shader) {
+          I->StdCGO = CGOCombineBeginEnd(I->ShapeCGO);
+          assert(!I->StdCGO->has_begin_end);
+        } else {
+          I->StdCGO = CGONew(G);
+          CGODisable(I->StdCGO, GL_DEPTH_TEST);
+          CGOEnable(I->StdCGO, GL_RAMP_SHADER);
+          I->offsetPtOP = CGOUniform3f(I->StdCGO, RAMP_OFFSETPT, I->Coord);
+          I->StdCGO->free_append(
+              CGOOptimizeToVBONotIndexedNoShader(I->ShapeCGO));
+          CGODisable(I->StdCGO, GL_RAMP_SHADER);
+          CGOEnable(I->StdCGO, GL_DEPTH_TEST);
+          CGOStop(I->StdCGO);
+          assert(I->StdCGO->use_shader);
+          assert(!I->StdCGO->has_begin_end);
         }
-        if (I->PickCGO) {
-          if (use_shader) {
-            CGORenderPicking(I->PickCGO, info, &context, I->Obj->Setting.get(),
-                             nullptr);
-          }
-        }
-      } else {
-        if (!I->StdCGO && I->ShapeCGO) {
-          if (!use_shader) {
-            I->StdCGO = CGOCombineBeginEnd(I->ShapeCGO);
-            assert(!I->StdCGO->has_begin_end);
-          } else {
-            I->StdCGO = CGONew(G);
-            CGODisable(I->StdCGO, GL_DEPTH_TEST);
-            CGOEnable(I->StdCGO, GL_RAMP_SHADER);
-            I->offsetPtOP = CGOUniform3f(I->StdCGO, RAMP_OFFSETPT, I->Coord);
-            I->StdCGO->free_append(
-                CGOOptimizeToVBONotIndexedNoShader(I->ShapeCGO));
-            CGODisable(I->StdCGO, GL_RAMP_SHADER);
-            CGOEnable(I->StdCGO, GL_DEPTH_TEST);
-            CGOStop(I->StdCGO);
-            assert(I->StdCGO->use_shader);
-            assert(!I->StdCGO->has_begin_end);
-          }
-        }
-        if (I->StdCGO) {
-          if (use_shader) {
-            if (color)
-              CGORender(I->StdCGO, nullptr, I->Obj->Setting.get(), nullptr,
-                        info, nullptr);
-          }
+      }
+      if (I->StdCGO) {
+        if (use_shader) {
+          if (color)
+            CGORender(I->StdCGO, nullptr, I->Obj->Setting.get(), nullptr, info,
+                      nullptr);
         }
       }
     }

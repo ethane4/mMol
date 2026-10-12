@@ -30,8 +30,6 @@ Z* -------------------------------------------------------------------
 #include "pymol/base/feedback.h"
 #include "pymol/platform/main_thread.h"
 
-#define Trace_OFF
-
 #define O3(field, P1, P2, P3, offs) \
   ((field)->get<float>(P1 + offs[0], P2 + offs[1], P3 + offs[2]))
 
@@ -629,9 +627,6 @@ static int TetsurfAlloc(CTetsurf* II) {
     TetsurfPurge(I);
     ok = false;
   }
-#ifdef Trace
-  printf(" TetsurfAlloc: ok: %i\n", ok);
-#endif
   return (ok);
 }
 static void TetsurfPurge(CTetsurf* II) {
@@ -702,9 +697,6 @@ static int TetsurfFindActiveBoxes(CTetsurf* II, cIsosurfaceMode mode,
   float** const vert = &vert_;
   CTetsurf* I = II;
   int a, b, i, j, k;
-#ifdef Trace
-  int ECount = 0;
-#endif
   int i000, i001, i010, i011, i100, i101, i110, i111;
   float *c000, *c001, *c010, *c011, *c100, *c101, *c110, *c111;
   float d000, d001, d010, d011, d100, d101, d110, d111;

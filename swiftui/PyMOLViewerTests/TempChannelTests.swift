@@ -38,6 +38,7 @@ final class TempChannelTests: XCTestCase {
       TempChannel.Stem.gizmo,
       TempChannel.Stem.settings, TempChannel.Stem.rayOverlay,
       TempChannel.Stem.objectPanel, TempChannel.Stem.objectDetail,
+      TempChannel.Stem.longPress, TempChannel.Stem.renderOptions,
     ]
     XCTAssertEqual(
       listed, declared,

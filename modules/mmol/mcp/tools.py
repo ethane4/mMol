@@ -72,10 +72,7 @@ def _run_pymol_command(args):
         cmd.sync()
         return _text("ok")
 
-    try:
-        return run_on_main(_body)
-    except Exception:
-        return _error(traceback.format_exc())
+    return run_on_main(_body)
 
 
 def _run_python(args):
@@ -96,10 +93,7 @@ def _run_python(args):
         except Exception:
             return _error(buf.getvalue() + "\n" + traceback.format_exc())
 
-    try:
-        return run_on_main(_body)
-    except Exception:
-        return _error(traceback.format_exc())
+    return run_on_main(_body)
 
 
 def _get_session_state(args):
@@ -132,10 +126,7 @@ def _get_session_state(args):
         }
         return _text(json.dumps(state, indent=2))
 
-    try:
-        return run_on_main(_body)
-    except Exception:
-        return _error(traceback.format_exc())
+    return run_on_main(_body)
 
 
 def _capture_viewport(args):
@@ -274,10 +265,7 @@ def _color_by_csv(args):
             "heatmap chip; residues the CSV doesn't cover turn grey." %
             (obj, os.path.basename(path), nrows, ", ".join(cols)))
 
-    try:
-        return run_on_main(_body)
-    except Exception:
-        return _error(traceback.format_exc())
+    return run_on_main(_body)
 
 
 def _contact_map(args):
@@ -341,10 +329,7 @@ def _contact_map(args):
                 },
                 indent=1))
 
-    try:
-        return run_on_main(_body)
-    except Exception:
-        return _error(traceback.format_exc())
+    return run_on_main(_body)
 
 
 # --- Registry + dispatcher ------------------------------------------------

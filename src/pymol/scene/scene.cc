@@ -20,7 +20,6 @@ Z* -------------------------------------------------------------------
 #include "pymol/scene/scene.h"
 #include "pymol/ray/scene_ray.h"
 #include "pymol/scene/scene_mouse.h"
-#include "pymol/scene/scene_picking.h"
 #include "pymol/ui/control.h"
 #include "pymol/scene/movie.h"
 #include "pymol/executive/editor.h"
@@ -185,11 +184,6 @@ void GridUpdate(GridInfo* I, float asp_ratio, GridMode mode, int size) {
   } else {
     I->active = false;
   }
-}
-
-void SceneInvalidateStencil(PyMOLGlobals* G) {
-  CScene* I = G->Scene;
-  I->StencilValid = false;
 }
 
 int SceneGetGridSize(PyMOLGlobals* G, GridMode grid_mode) {
@@ -592,7 +586,6 @@ void SceneSetStereo(PyMOLGlobals* G, bool flag) {
       OrthoReshape(G, G->Option->winX, G->Option->winY, true);
     }
 
-    SceneInvalidateStencil(G);
     SceneInvalidate(G);
   }
 }
@@ -1378,9 +1371,6 @@ void SceneFree(PyMOLGlobals* G) {
   CScene* I = G->Scene;
 
   CGOFree(I->AlphaCGO);
-  CGOFree(I->offscreenCGO);
-  CGOFree(I->offscreenOIT_CGO);
-  CGOFree(I->offscreenOIT_CGO_copy);
   I->m_slots.clear();
   I->Obj.clear();
   I->GadgetObjs.clear();
@@ -1494,7 +1484,6 @@ void CScene::reshape(int width, int height) {
   }
   /*MovieClearImages(G); */
   MovieSetSize(G, I->Width, I->Height);
-  SceneInvalidateStencil(G);
 }
 void SceneResetNormal(PyMOLGlobals* G, int lines) {
   CScene* I = G->Scene;
@@ -1715,24 +1704,6 @@ static void SceneObjectUpdateSpawn(PyMOLGlobals* G,
   }
 }
 
-static void SceneStencilCheck(PyMOLGlobals* G) {
-  CScene* I = G->Scene;
-  if (I->StereoMode == cStereo_stencil_by_row) {
-    int bottom = 0;
-
-#ifndef _PYMOL_PRETEND_GLUT
-    if (G->Main)
-      bottom = p_glutGet(P_GLUT_WINDOW_Y) + p_glutGet(P_GLUT_WINDOW_HEIGHT);
-#endif
-
-    int parity = bottom & 0x1;
-    if (parity != I->StencilParity) {
-      I->StencilValid = false;
-      I->StencilParity = parity;
-      SceneDirty(G);
-    }
-  }
-}
 void SceneUpdate(PyMOLGlobals* G, int force) {
   CScene* I = G->Scene;
 
@@ -1746,7 +1717,6 @@ void SceneUpdate(PyMOLGlobals* G, int force) {
   WizardDoPosition(G, false);
   WizardDoView(G, false);
   EditorUpdate(G);
-  SceneStencilCheck(G);
 
   if (defer_builds_mode == 0) {
     if (SettingGetGlobal_i(G, cSetting_draw_mode) == -2) {
@@ -1954,133 +1924,6 @@ void SceneGetAdjustedLightValues(PyMOLGlobals* G, float* ptr_spec,
   *ptr_spec_direct_power = spec_direct_power;
 }
 
-/*
- * Shader attribute names
- */
-#define TEMPLATE(i) "g_LightSource[" #i "].position"
-const char* lightsource_position_names[] = {
-    TEMPLATE(0), TEMPLATE(1), TEMPLATE(2), TEMPLATE(3), TEMPLATE(4),
-    TEMPLATE(5), TEMPLATE(6), TEMPLATE(7), TEMPLATE(8), TEMPLATE(9)};
-#undef TEMPLATE
-
-#define TEMPLATE(i) "g_LightSource[" #i "].diffuse"
-const char* lightsource_diffuse_names[] = {
-    TEMPLATE(0), TEMPLATE(1), TEMPLATE(2), TEMPLATE(3), TEMPLATE(4),
-    TEMPLATE(5), TEMPLATE(6), TEMPLATE(7), TEMPLATE(8), TEMPLATE(9)};
-#undef TEMPLATE
-
-/**
- * Sets up lighting for immediate mode if shaderPrg=nullptr, otherwise
- * sets lighting uniforms for the given shader program.
- *
- * Supports up to light_count=8
- */
-void SceneProgramLighting(PyMOLGlobals* G, CShaderPrg* shaderPrg) {
-  /* load up the light positions relative to the camera while
-     MODELVIEW still has the identity */
-  int n_light = glm::clamp(SettingGetGlobal_i(G, cSetting_light_count), 0, 8);
-  int spec_count = SettingGetGlobal_i(G, cSetting_spec_count);
-  float direct = SettingGetGlobal_f(G, cSetting_direct);
-  float reflect = SettingGetGlobal_f(G, cSetting_reflect) *
-                  SceneGetReflectScaleValue(G, n_light);
-  float spec[4];
-  float diff[4];
-  const float zero[4] = {0.0F, 0.0F, 0.0F, 1.0F};
-  float vv[4] = {0.F, 0.F, 1.F, 0.F};  // position
-  float spec_value, shine, spec_direct, spec_direct_power;
-
-  SceneGetAdjustedLightValues(G, &spec_value, &shine, &spec_direct,
-                              &spec_direct_power, n_light);
-
-  if (n_light < 2) {
-    direct += reflect;
-    if (direct > 1.0F) direct = 1.0F;
-  }
-
-  if (spec_count < 0) {
-    spec_count = n_light;
-  }
-
-  // light 0
-
-  white4f(diff, SettingGetGlobal_f(G, cSetting_ambient));
-
-  {
-    shaderPrg->Set4fv("g_LightModel.ambient", diff);
-    white4f(diff, (direct > R_SMALL4) ? direct : 0.f);
-    shaderPrg->Set4fv(lightsource_diffuse_names[0], diff);
-    shaderPrg->Set4fv(lightsource_position_names[0], vv);
-  }
-
-  // light 1-N
-
-  white4f(spec, spec_value);
-  white4f(diff, reflect);
-
-  for (int i = 1; i < n_light; ++i) {
-    // normalized/inverted light direction
-    copy3f(SettingGetGlobal_3fv(G, light_setting_indices[i - 1]), vv);
-    normalize3f(vv);
-    invert3f(vv);
-
-    {
-      shaderPrg->Set4fv(lightsource_position_names[i], vv);
-      shaderPrg->Set4fv(lightsource_diffuse_names[i], diff);
-    }
-  }
-}
-
-/**
- * Set up the Scene Fog* member variables and immediate mode fog (incl.
- * gl_Fog struct for non-ES2 shaders)
- */
-int SceneSetFog(PyMOLGlobals* G) {
-  CScene* I = G->Scene;
-  int fog_active = false;
-  float fog_density = SettingGetGlobal_f(G, cSetting_fog);
-  I->FogStart =
-      (I->m_view.m_clipSafe().m_back - I->m_view.m_clipSafe().m_front) *
-          SettingGetGlobal_f(G, cSetting_fog_start) +
-      I->m_view.m_clipSafe().m_front;
-  if ((fog_density > R_SMALL8) && (fog_density != 1.0F)) {
-    I->FogEnd = I->FogStart +
-                (I->m_view.m_clipSafe().m_back - I->FogStart) / fog_density;
-  } else {
-    I->FogEnd = I->m_view.m_clipSafe().m_back;
-  }
-
-  if (SettingGetGlobal_b(G, cSetting_depth_cue) && fog_density != 0.0F) {
-    fog_active = true;
-  }
-
-  return fog_active;
-}
-
-/**
- * Set the g_Fog_* uniforms for ES2 shaders
- */
-void SceneSetFogUniforms(PyMOLGlobals* G, CShaderPrg* shaderPrg) {
-  CScene* I = G->Scene;
-  if (shaderPrg) {
-    float fogScale = 1.0f / (I->FogEnd - I->FogStart);
-    shaderPrg->Set1f("g_Fog_end", I->FogEnd);
-    shaderPrg->Set1f("g_Fog_scale", fogScale);
-  }
-}
-
-void SceneSetupGLPicking(PyMOLGlobals* G) {
-  /* picking mode: we want flat, unshaded, unblended, unsmooth colors */
-
-  glDisable(GL_FOG);
-  glDisable(GL_COLOR_MATERIAL);
-  glDisable(GL_LIGHTING);
-  glDisable(GL_LINE_SMOOTH);
-  glDisable(GL_DITHER);
-  glDisable(GL_BLEND);
-  glDisable(GL_POLYGON_SMOOTH);
-  if (G->Option->multisample) glDisable(0x809D); /* GL_MULTISAMPLE_ARB */
-  glShadeModel(GL_FLAT);
-}
 void SceneRestartFrameTimer(PyMOLGlobals* G) {
   CScene* I = G->Scene;
   I->LastFrameTime = UtilGetSeconds(G);

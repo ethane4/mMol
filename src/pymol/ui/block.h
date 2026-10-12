@@ -44,11 +44,6 @@ struct Block {
    */
   virtual void draw(CGO* orthoCGO) {};
 
-  /**
-   * Draws this block (uses overidden fastDraw implementation)
-   * @param orthoCGO CGO to append to
-   */
-  virtual bool fastDraw(CGO* orthoCGO) { return false; }
   virtual void reshape(int width, int height);
   virtual int click(int button, int x, int y, int mod) { return 0; }
   virtual int cursor(int x, int y, int mod) { return 0; }
@@ -64,13 +59,6 @@ struct Block {
    * @note: Implementation no longer recursive.
    */
   void recursiveDraw(CGO* orthoCGO);
-
-  /**
-   * Draws this block (uses overridden fastDraw implementation)
-   * @param orthoCGO CGO to append to
-   * @note: Implementation no longer recursive.
-   */
-  bool recursiveFastDraw(CGO* orthoCGO);
 
   /**
    * Determines whether this block is located at (x, y)

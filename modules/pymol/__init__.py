@@ -1,79 +1,12 @@
 '''PyMOL Molecular Graphics System
 Copyright (c) Schrodinger, Inc.
 
-Supported ways to launch PyMOL:
-
-  If $PYMOL_PATH is a non-default location, it must be set and exported
-  before launching PyMOL.
-
-  From a terminal:
-
-    shell> python /path/to/pymol/__init__.py [args]
-
-  If the 'pymol' module is in PYTHONPATH
-
-    shell> python -m pymol [args]
-
-  From a python main thread:
-
-    >>> # blocks the interpreter
-    >>> import pymol
-    >>> pymol.launch()
-
-  From a python main thread, spawning a new thread:
-
-    >>> # with GUI
-    >>> # THIS IS NOT SUPPORTED ON macOS
-    >>> import pymol
-    >>> pymol.finish_launching()
-
-    >>> # without GUI
-    >>> import pymol
-    >>> pymol.finish_launching(['pymol', '-cq'])
-
+The mMol app embeds Python and imports this package; it is not launched
+from the command line.
 '''
 
 import os
 import sys
-import __main__
-
-if __name__ == '__main__':
-
-    # PyMOL launched as "python pymol/__init__.py"
-    # or via execfile(".../pymol/__init__.py",...) from main
-    # or as "python -m pymol.__init__"
-
-    if 'pymol' not in sys.modules:
-        # "python /abc/pymol/__init__.py" will add /abc/pymol to PYTHONPATH
-        # (we don't want that), but not /abc and not the current directory (we
-        # want those)
-
-        pymol_base = os.path.dirname(os.path.realpath(__file__))
-        site_packages = os.path.dirname(pymol_base)
-
-        # remove /abc/pymol
-        if pymol_base in sys.path:
-            sys.path.remove(pymol_base)
-
-        # add /abc
-        if site_packages not in sys.path:
-            sys.path.insert(0, site_packages)
-
-        # add current directory
-        if '' not in sys.path:
-            sys.path.insert(0, '')
-
-    # arguments default to sys.argv... but also support execfile(...)
-    # from a terminal where the user could set pymol_argv
-    args = getattr(__main__, "pymol_argv", None)
-
-    # standard launch (consume main thread)
-    import pymol
-    sys.exit(pymol.launch(args))
-
-IS_WINDOWS = sys.platform.startswith('win')
-IS_MACOS = sys.platform.startswith('darwin')
-IS_LINUX = sys.platform.startswith('linux')
 
 import _thread as thread
 
@@ -123,10 +56,6 @@ def _init_internals(_pymol):
 
     _pymol._cache = []
 
-    # standard input reading thread
-
-    _pymol._stdin_reader_thread = None
-
     # stored views
 
     _pymol._view_dict = {}
@@ -141,7 +70,6 @@ def _init_internals(_pymol):
     _pymol._invocation = Scratch_Storage()
     _pymol._invocation.options = copy.deepcopy(invocation.options)
     _pymol._invocation.get_user_config = invocation.get_user_config
-    _pymol._invocation.parse_args = invocation.parse_args
 
     # these locks are to be shared by all PyMOL instances within a
     # single Python interpeter
@@ -172,56 +100,6 @@ def get_version_message(v=None):
     return p
 
 
-def guess_pymol_path():
-    '''Guess PYMOL_PATH from typical locations and return it as string.
-    '''
-    init_file = os.path.abspath(__file__)
-
-    pymol_path_candidates = [
-        # $PYMOL_PATH == <site-packages>/pymol/pymol_path
-        os.path.join(os.path.dirname(init_file), 'pymol_path'),
-
-        # $PYMOL_PATH/modules/pymol/__init__.py
-        re.sub(r"[\/\\]modules[\/\\]pymol[\/\\]__init__\.py[c]*$", "",
-               init_file),
-
-        # /usr/share/pymol
-        os.path.join(sys.prefix, 'share', 'pymol'),
-
-        # venv --system-site-packages (experimental)
-        os.path.join(sys.base_prefix, 'share', 'pymol'),
-    ]
-
-    for pymol_path in pymol_path_candidates:
-        if os.path.isdir(pymol_path):
-            return pymol_path
-
-    return '.'
-
-
-def setup_environ():
-    # guess PYMOL_PATH if unset
-    if 'PYMOL_PATH' not in os.environ:
-        os.environ['PYMOL_PATH'] = guess_pymol_path()
-
-    # other PyMOL variables
-    if 'PYMOL_DATA' not in os.environ:
-        os.environ['PYMOL_DATA'] = os.path.join(os.environ['PYMOL_PATH'],
-                                                'data')
-    if 'PYMOL_SCRIPTS' not in os.environ:
-        os.environ['PYMOL_SCRIPTS'] = os.path.join(os.environ['PYMOL_PATH'],
-                                                   'scripts')
-    os.environ['TUT'] = os.path.join(os.environ['PYMOL_DATA'], 'tut')
-
-    # set Tcl/Tk environment if we ship it in ext/lib
-    pymol_path = os.environ['PYMOL_PATH']
-    for varname, dirname in [('TCL_LIBRARY', 'tcl8.5'),
-                             ('TK_LIBRARY', 'tk8.5')]:
-        dirname = os.path.join(pymol_path, "ext", "lib", dirname)
-        if os.path.isdir(dirname):
-            os.environ[varname] = dirname
-
-
 def exec_str(self, string):
     '''Execute string in "self" namespace (used from C)
     '''
@@ -233,205 +111,20 @@ def exec_str(self, string):
 
 
 def exec_deferred(self):
-    '''Execute the stuff from invocations.options.deferred
+    '''Run once the core is ready (called from C)
     '''
-    try:
-        from socket import error as socket_error
-    except ImportError:
-        socket_error = None
-        print('import socket failed')
-
-    cmd = self.cmd
-    _pymol = cmd._pymol
-
-    # read from stdin (-p)
-    if self.invocation.options.read_stdin and not _pymol._stdin_reader_thread:
-        try:
-            t = _pymol._stdin_reader_thread = \
-                    threading.Thread(target=cmd._parser.stdin_reader)
-            t.setDaemon(1)
-            t.start()
-        except:
-            traceback.print_exc()
-
-    # do the deferred stuff
-    try:
-        if cmd.ready():
-            cmd.config_mouse(quiet=1)
-            for a in self.invocation.options.deferred:
-                if a[0:4] == "_do_":
-                    cmd.do(a[4:])
-                else:
-                    cmd.load(a, quiet=0)
-    except CmdException as e:
-        colorprinting.error(str(e))
-        colorprinting.error(
-            " Error: Argument processing aborted due to exception (above).")
-    except socket_error:
-        # this (should) only happen if we're opening a PWG file on startup
-        # and the port is busy.  For now, simply bail...
-        cmd.wizard("message", [
-            "Socket.error: ", "", "\\999Assigned socket in use.", "",
-            "\\779Is PyMOL already launched?", "", "\\966Shutting down..."
-        ])
-        cmd.refresh()
-        cmd.do("time.sleep(2);cmd.quit()")
+    self.cmd.config_mouse(quiet=1)
 
 
 def adapt_to_hardware(self):
-    '''optimize for (or workaround) specific hardware
+    '''Use every CPU core, and store that as the default state (called from C)
     '''
     cmd = self.cmd
-
-    vendor, renderer, version = cmd.get_renderer()
-
-    # Quadro cards don't support GL_BACK in stereo contexts
-    if vendor.startswith('NVIDIA'):
-        if 'Quadro' in renderer:
-            if invocation.options.show_splash:
-                print(" Adapting to Quadro hardware.")
-            cmd.set('stereo_double_pump_mono', 1)
-
-    elif vendor.startswith('Mesa'):
-        if renderer[0:18] == 'Mesa GLX Indirect':
-            pass
-
-    elif vendor.startswith('ATI'):
-        if renderer[0:17] == 'FireGL2 / FireGL3':  # obsolete ?
-            if invocation.options.show_splash:
-                print(" Adapting to FireGL hardware.")
-            cmd.set('line_width', 2, quiet=1)
-
-        if IS_WINDOWS:
-            if sys.getwindowsversion()[0] > 5:
-                # prevent color corruption by calling glFlush etc.
-                cmd.set('ati_bugs', 1)
-
-        if 'Radeon HD' in renderer:
-            if invocation.options.show_splash:
-                print(
-                    " Adjusting settings to improve performance for ATI cards.")
-
-            if cmd.get_setting_int("use_shaders") == 0:
-                # limit frame rate to 30 fps to avoid ATI "jello"
-                # where screen updates fall way behind the user.
-                cmd.set("max_ups", 30)
-
-    elif vendor.startswith('Microsoft'):
-        if renderer[0:17] == 'GDI Generic':
-            cmd.set('light_count', 1)
-            cmd.set('spec_direct', 0.7)
-
-    elif vendor.startswith("Intel"):
-        if "Express" in renderer:
-            if invocation.options.show_splash:
-                print(" Disabling shaders for Intel Express graphics")
-            cmd.set("use_shaders", 0)
-
-    elif (' R300 ' in
-          vendor  # V: X.Org R300 Project, R: Gallium 0.4 on ATI RV370
-         ):
-        if invocation.options.show_splash:
-            print(" Detected blacklisted graphics driver.  Disabling shaders.")
-        cmd.set("use_shaders", 0)
-
-    # find out how many processors we have, and adjust hash
-    # table size to reflect available RAM
-
-    try:
-        import multiprocessing
-        ncpu = multiprocessing.cpu_count()
-        if ncpu > 1:
-            cmd.set("max_threads", ncpu)
-            if invocation.options.show_splash:
-                print(" Detected %d CPU cores." % ncpu, end=' ')
-                print(" Enabled multithreaded rendering.")
-    except:
-        pass
-
-    # store our adapted state as default
+    ncpu = os.cpu_count()
+    cmd.set("max_threads", ncpu)
+    if invocation.options.show_splash:
+        print(" Detected %d CPU cores.  Enabled multithreaded rendering." % ncpu)
     cmd.reinitialize("store")
-
-
-def prime_pymol():
-    '''Set the current thread as the glutThread
-    '''
-    global glutThread
-
-    if not glutThread:
-        glutThread = thread.get_ident()
-
-
-def _launch_no_gui():
-    import pymol2
-
-    p = pymol2.SingletonPyMOL()
-    p.start()
-
-    # TODO sufficient?
-    while (p.idle() or p.getRedisplay() or
-           invocation.options.keep_thread_alive or cmd.get_modal_draw() or
-           cmd.get_setting_int('keep_alive') or
-           cmd._pymol._stdin_reader_thread is not None):
-        p.draw()
-
-    # TODO needed?
-    cmd.sync()
-    p.stop()
-
-
-def launch(args=None, block_input_hook=0):
-    '''Run PyMOL with args
-
-    Only returns if we are running pretend GLUT.
-    '''
-    if args is None:
-        args = sys.argv
-    invocation.parse_args(args)
-
-    if invocation.options.no_gui:
-        return _launch_no_gui()
-    if invocation.options.testing:
-        return pymol._cmd.test2()
-
-    prime_pymol()
-    _cmd.runpymol(None, block_input_hook)
-
-
-def finish_launching(args=None):
-    '''Start the PyMOL process in a thread
-
-    THIS IS NOT SUPPORTED ON macOS
-    '''
-    global glutThreadObject
-
-    if cmd._COb is not None:
-        return
-
-    import pymol
-
-    # legacy
-    if args is None:
-        args = getattr(pymol, 'pymol_argv', None)
-    if args is None:
-        args = getattr(__main__, 'pymol_argv', sys.argv)
-
-    if True:
-        # run PyMOL in thread
-        invocation.options.keep_thread_alive = 1
-        cmd.reaper = threading.current_thread()
-        glutThreadObject = threading.Thread(target=launch, args=(list(args), 1))
-        glutThreadObject.start()
-
-    e = threading.Event()
-
-    # wait for the C library to initialize
-    while cmd._COb is None:
-        e.wait(0.01)
-
-    # make sure symmetry module has time to start...
-    while not hasattr(pymol, 'xray'):
-        e.wait(0.01)
 
 
 class CmdException(Exception):
@@ -517,10 +210,6 @@ def _colortype(cmd):
 ######### VARIABLES ############################
 
 glutThread = None
-
-######### ENVIRONMENT ##########################
-
-setup_environ()
 
 # initialize instance-specific module/object internals
 _init_internals(sys.modules[__name__])

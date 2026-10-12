@@ -26,31 +26,6 @@ Z* -------------------------------------------------------------------
 #include "pymol/base/util.h"
 #include "pymol/geometry/matrix.h"
 
-static void FontGLUTSave(CFontGLUT* I) {
-  glGetIntegerv(GL_UNPACK_SWAP_BYTES, (GLint*)&I->swapbytes);
-  glGetIntegerv(GL_UNPACK_LSB_FIRST, (GLint*)&I->lsbfirst);
-  glGetIntegerv(GL_UNPACK_ROW_LENGTH, (GLint*)&I->rowlength);
-  glGetIntegerv(GL_UNPACK_SKIP_ROWS, (GLint*)&I->skiprows);
-  glGetIntegerv(GL_UNPACK_SKIP_PIXELS, (GLint*)&I->skippixels);
-  glGetIntegerv(GL_UNPACK_ALIGNMENT, (GLint*)&I->alignment);
-
-  glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_FALSE);
-  glPixelStorei(GL_UNPACK_LSB_FIRST, GL_FALSE);
-  glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-  glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-  glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-}
-
-static void FontGLUTRestore(CFontGLUT* I) {
-  glPixelStorei(GL_UNPACK_SWAP_BYTES, I->swapbytes);
-  glPixelStorei(GL_UNPACK_LSB_FIRST, I->lsbfirst);
-  glPixelStorei(GL_UNPACK_ROW_LENGTH, I->rowlength);
-  glPixelStorei(GL_UNPACK_SKIP_ROWS, I->skiprows);
-  glPixelStorei(GL_UNPACK_SKIP_PIXELS, I->skippixels);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, I->alignment);
-}
-
 /**
  * check if masked `c` equals `value`
  */
@@ -230,13 +205,6 @@ const char* CFontGLUT::RenderOpenGL(const RenderInfo* info, const char* st,
         }
       }
 
-      if (!textured) {
-        glColor3fv(TextGetColor(G));
-
-        glRasterPos4fv(TextGetPos(G));
-        FontGLUTSave(I);
-      }
-
       if (textured) CharacterRenderOpenGLPrime(G, info);
 
       bool utf8_error = false;
@@ -279,11 +247,6 @@ const char* CFontGLUT::RenderOpenGL(const RenderInfo* info, const char* st,
 
       if (textured && !pushed) {
         ScenePopRasterMatrix(G);
-      }
-      if (!textured) {
-        FontGLUTRestore(I);
-        glFlush(); /* workaround for screen flashes on late-model nVidia
-                      hardware */
       }
     }
   }

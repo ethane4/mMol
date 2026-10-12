@@ -56,14 +56,9 @@ void SceneRender(PyMOLGlobals* G, const SceneRenderInfo& renderInfo);
 void SceneRenderMetal(PyMOLGlobals* G);
 void SceneRenderMetalSelections(PyMOLGlobals* G);
 void SceneRenderAll(PyMOLGlobals* G, SceneUnitContext* context, float* normal,
-                    PickColorManager*, RenderPass pass, int fat,
-                    float width_scale, GridInfo* grid, int dynamic_pass,
-                    SceneRenderWhich which_objects,
+                    RenderPass pass, int fat, float width_scale, GridInfo* grid,
+                    int dynamic_pass, SceneRenderWhich which_objects,
                     SceneRenderOrder render_order);
-
-void SceneInitializeViewport(PyMOLGlobals* G, bool offscreen);
-
-void GridSetViewport(PyMOLGlobals* G, GridInfo* I, int slot);
 
 /**
  * Sets scene projection matrix

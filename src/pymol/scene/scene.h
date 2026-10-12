@@ -62,11 +62,8 @@ enum class SceneClipMode {
 };
 
 float SceneGetDynamicLineWidth(RenderInfo* info, float line_width);
-void SceneInvalidateStencil(PyMOLGlobals* G);
 int SceneInit(PyMOLGlobals* G);
 void SceneUpdate(PyMOLGlobals* G, int force);
-int SceneSetFog(PyMOLGlobals* G);
-void SceneSetFogUniforms(PyMOLGlobals* G, CShaderPrg*);
 void SceneSetFrame(PyMOLGlobals* G, int mode, int frame);
 int SceneGetFrame(PyMOLGlobals* G);
 int SceneGetState(PyMOLGlobals* G);
@@ -231,12 +228,9 @@ float* SceneGetModelViewMatrixPtr(PyMOLGlobals* G);
 glm::mat4& SceneGetProjectionMatrix(PyMOLGlobals* G);
 float* SceneGetProjectionMatrixPtr(PyMOLGlobals* G);
 
-void SceneProgramLighting(PyMOLGlobals* G, CShaderPrg* shaderPrg = nullptr);
 void SceneGLClear(PyMOLGlobals* G, GLbitfield mask);
 
 void SceneUpdateAnimation(PyMOLGlobals* G);
-
-void SceneSetupGLPicking(PyMOLGlobals* G);
 
 int SceneDrawImageOverlay(PyMOLGlobals* G, int override, CGO* orthoCGO);
 

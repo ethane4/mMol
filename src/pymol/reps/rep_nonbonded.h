@@ -22,6 +22,5 @@ struct CoordSet;
 struct RenderInfo;
 
 Rep* RepNonbondedNew(CoordSet* cset, int state);
-void RepNonbondedRenderImmediate(CoordSet* cs, RenderInfo* info);
 
 #endif

@@ -1,7 +1,7 @@
 # mmol/pymolrc.py
 #
 # mMol boots Python directly and never goes through
-# pymol.invocation.parse_args, so ~/.pymolrc would otherwise be silently
+# PyMOL's command-line startup, so ~/.pymolrc would otherwise be silently
 # ignored (see mMol#225). load() runs it the way desktop PyMOL does, so one
 # startup script serves both apps.
 

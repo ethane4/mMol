@@ -33,8 +33,6 @@ Z* -------------------------------------------------------------------
 #include "pymol/text/v_font.h"
 #include "pymol/app/main.h"
 
-CGO* ObjectGadgetPyListFloatToCGO(PyObject* list);
-
 int ObjectGadgetGetVertex(const ObjectGadget* I, int index, int base,
                           float* v) {
   GadgetSet* gs;
@@ -398,7 +396,7 @@ void ObjectGadget::render(RenderInfo* info) {
   auto I = this;
   int state = info->state;
   const RenderPass pass = info->pass;
-  if (pass == RenderPass::Transparent || info->ray || info->pick) {
+  if (pass == RenderPass::Transparent || info->ray) {
     ObjectPrepareContext(I, info);
     for (StateIterator iter(I->G, I->Setting.get(), state, I->NGSet);
          iter.next();) {

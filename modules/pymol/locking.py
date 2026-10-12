@@ -50,18 +50,6 @@ def unlock(result=None, _self=cmd):  # INTERNAL
     '''
     thread_owns_gui = _self.is_gui_thread()
 
-    if thread_owns_gui and _self.reaper is not None:
-        # TODO what's the use case? How can the finish_launching() thread
-        # die and what's the expected behavior? (see PYMOL-3247)
-        try:
-            if not _self.reaper.is_alive():
-                if _self._pymol.invocation.options.no_gui:
-                    _cmd.quit(_self._COb)  # TO FIX
-                else:
-                    _self.reaper = None
-        except:
-            pass
-
     _self.lock_api.release()
 
     # don't flush if we have an incipient error (negative input)

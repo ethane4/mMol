@@ -1580,12 +1580,6 @@ void matrix_to_rotation(Matrix53f rot, float* axis, float* angle) {
   Matrix53f rotck;
   int a, b;
 
-#ifdef MATCHK
-  printf("starting matrix\n");
-  for (a = 0; a < 3; a++)
-    printf("%8.3f %8.3f %8.3f\n", rot[a][0], rot[a][1], rot[a][2]);
-#endif
-
   for (a = 0; a < 3; a++)
     for (b = 0; b < 3; b++) rot3d[a][b] = (double)rot[a][b];
 
@@ -1617,13 +1611,6 @@ void matrix_to_rotation(Matrix53f rot, float* axis, float* angle) {
   /*  printf("angle %8.3f \n",*angle); */
 
   rotation_to_matrix(rotck, axis, *angle);
-
-#ifdef MATCHK
-  printf("reconstructed matrix: \n");
-  for (a = 0; a < 3; a++)
-    printf("%8.3f %8.3f %8.3f\n", rotck[a][0], rotck[a][1], rotck[a][2]);
-  printf("\n");
-#endif
 }
 void mult3f(const float* vsrc, const float val, float* vdest) {
   vdest[0] = vsrc[0] * val;

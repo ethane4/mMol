@@ -211,8 +211,6 @@ Z* -------------------------------------------------------------------
 
 #define cButModeInputCount 80
 
-typedef char CodeType[10];
-
 int ButModeInit(PyMOLGlobals* G);
 void ButModeFree(PyMOLGlobals* G);
 Block* ButModeGetBlock(PyMOLGlobals* G);
@@ -222,6 +220,5 @@ int ButModeGet(PyMOLGlobals* G, int button);
 void ButModeSet(PyMOLGlobals* G, int button, int action);
 int ButModeTranslate(PyMOLGlobals* G, int button, int mod);
 int ButModeCheckPossibleSingleClick(PyMOLGlobals* G, int button, int mod);
-int ButModeGetHeight(PyMOLGlobals* G);
 
 #endif

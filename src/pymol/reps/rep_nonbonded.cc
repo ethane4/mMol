@@ -50,10 +50,6 @@ RepNonbonded::~RepNonbonded() {
   CGOFree(shaderCGO);
 }
 
-void RepNonbondedRenderImmediate(CoordSet* cs, RenderInfo* info) {
-  // TODO: convert to VBO/shader path
-}
-
 static int RepNonbondedCGOGenerate(RepNonbonded* I, RenderInfo* info) {
   PyMOLGlobals* G = I->G;
   float alpha;
@@ -137,7 +133,6 @@ static int RepNonbondedCGOGenerate(RepNonbonded* I, RenderInfo* info) {
 void RepNonbonded::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   int ok = true;
   float alpha = SettingGet_f(G, I->cs->Setting.get(), I->obj->Setting.get(),
                              cSetting_nonbonded_transparency);
@@ -148,42 +143,35 @@ void RepNonbonded::render(RenderInfo* info) {
                  I->cs->Setting.get(), I->cs->Obj->Setting.get());
     ray->transparentf(0.0);
   } else if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-      CGORenderPicking(I->shaderCGO ? I->shaderCGO : I->primitiveCGO, info,
-                       &I->context, I->cs->Setting.get(),
-                       I->obj->Setting.get());
-    } else {
-      /* not pick, but render */
-      bool use_shader = SettingGetGlobal_b(G, cSetting_nonbonded_use_shader) &&
-                        SettingGetGlobal_b(G, cSetting_use_shaders);
-      if (!use_shader) {
-        CGORender(I->primitiveCGO, nullptr, nullptr, nullptr, info, I);
-        return;
-      }
-      bool nonbonded_as_cylinders =
-          SettingGetGlobal_b(G, cSetting_render_as_cylinders) &&
-          SettingGetGlobal_b(G, cSetting_nonbonded_as_cylinders);
-      if (I->shaderCGO && use_shader != I->shaderCGO->use_shader) {
-        CGOFree(I->shaderCGO);
-        I->shaderCGO = 0;
-      }
-
-      if (I->shaderCGO &&
-          (nonbonded_as_cylinders ^ I->shaderCGO_has_cylinders)) {
-        CGOFree(I->shaderCGO);
-        I->shaderCGO = 0;
-      }
-
-      if (!I->shaderCGO) {
-        I->shaderCGO = CGONew(G);
-        CHECKOK(ok, I->shaderCGO);
-        if (ok) {
-          I->shaderCGO->use_shader = use_shader;
-        }
-        ok &= RepNonbondedCGOGenerate(I, info);
-      }
-      CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
+    /* not pick, but render */
+    bool use_shader = SettingGetGlobal_b(G, cSetting_nonbonded_use_shader) &&
+                      SettingGetGlobal_b(G, cSetting_use_shaders);
+    if (!use_shader) {
+      CGORender(I->primitiveCGO, nullptr, nullptr, nullptr, info, I);
+      return;
     }
+    bool nonbonded_as_cylinders =
+        SettingGetGlobal_b(G, cSetting_render_as_cylinders) &&
+        SettingGetGlobal_b(G, cSetting_nonbonded_as_cylinders);
+    if (I->shaderCGO && use_shader != I->shaderCGO->use_shader) {
+      CGOFree(I->shaderCGO);
+      I->shaderCGO = 0;
+    }
+
+    if (I->shaderCGO && (nonbonded_as_cylinders ^ I->shaderCGO_has_cylinders)) {
+      CGOFree(I->shaderCGO);
+      I->shaderCGO = 0;
+    }
+
+    if (!I->shaderCGO) {
+      I->shaderCGO = CGONew(G);
+      CHECKOK(ok, I->shaderCGO);
+      if (ok) {
+        I->shaderCGO->use_shader = use_shader;
+      }
+      ok &= RepNonbondedCGOGenerate(I, info);
+    }
+    CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
   }
 }
 

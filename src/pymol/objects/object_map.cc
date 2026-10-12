@@ -445,7 +445,6 @@ void ObjectMapStatePurge(PyMOLGlobals* G, ObjectMapState* I) {
   I->Dim.clear();
   I->Range.clear();
   I->Grid.clear();
-  I->shaderCGO = nullptr;
 
   I->Symmetry = nullptr;
 
@@ -469,66 +468,15 @@ void ObjectMap::invalidate(cRep_t rep, cRepInv_t level, int state) {
     int a;
     for (a = 0; a < I->State.size(); a++) {
       if (I->State[a].Active) I->State[a].have_range = false;
-      I->State[a].shaderCGO = nullptr;
     }
   }
   SceneInvalidate(I->G);
-}
-
-/* Has no prototype */
-static CGO* ObjectMapCGOGenerate(PyMOLGlobals* G, float* corner) {
-  CGO cgo_value(G);
-  CGO* const shaderCGO = &cgo_value;
-  CGOBegin(shaderCGO, GL_LINES);
-
-  CGOVertexv(shaderCGO, corner + 3 * 0);
-  CGOVertexv(shaderCGO, corner + 3 * 1);
-
-  CGOVertexv(shaderCGO, corner + 3 * 0);
-  CGOVertexv(shaderCGO, corner + 3 * 2);
-
-  CGOVertexv(shaderCGO, corner + 3 * 2);
-  CGOVertexv(shaderCGO, corner + 3 * 3);
-
-  CGOVertexv(shaderCGO, corner + 3 * 1);
-  CGOVertexv(shaderCGO, corner + 3 * 3);
-
-  CGOVertexv(shaderCGO, corner + 3 * 0);
-  CGOVertexv(shaderCGO, corner + 3 * 4);
-
-  CGOVertexv(shaderCGO, corner + 3 * 1);
-  CGOVertexv(shaderCGO, corner + 3 * 5);
-
-  CGOVertexv(shaderCGO, corner + 3 * 2);
-  CGOVertexv(shaderCGO, corner + 3 * 6);
-
-  CGOVertexv(shaderCGO, corner + 3 * 3);
-  CGOVertexv(shaderCGO, corner + 3 * 7);
-
-  CGOVertexv(shaderCGO, corner + 3 * 4);
-  CGOVertexv(shaderCGO, corner + 3 * 5);
-
-  CGOVertexv(shaderCGO, corner + 3 * 4);
-  CGOVertexv(shaderCGO, corner + 3 * 6);
-
-  CGOVertexv(shaderCGO, corner + 3 * 6);
-  CGOVertexv(shaderCGO, corner + 3 * 7);
-
-  CGOVertexv(shaderCGO, corner + 3 * 5);
-  CGOVertexv(shaderCGO, corner + 3 * 7);
-
-  CGOEnd(shaderCGO);
-
-  CGOStop(shaderCGO);
-
-  return CGOOptimizeToVBONotIndexed(shaderCGO, 0, false);
 }
 
 void ObjectMap::render(RenderInfo* info) {
   auto I = this;
   int state = info->state;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   const RenderPass pass = info->pass;
   ObjectMapState* ms = nullptr;
 
@@ -570,26 +518,6 @@ void ObjectMap::render(RenderInfo* info) {
           ray->sausage3fv(corner + 3 * 4, corner + 3 * 6, radius, vc, vc);
           ray->sausage3fv(corner + 3 * 6, corner + 3 * 7, radius, vc, vc);
           ray->sausage3fv(corner + 3 * 5, corner + 3 * 7, radius, vc, vc);
-        } else if (G->HaveGUI && G->ValidContext) {
-          if (pick) {
-          } else {
-            // shader
-            if (!ms->shaderCGO) {
-              ms->shaderCGO.reset(ObjectMapCGOGenerate(G, corner));
-            }
-
-            if (ms->shaderCGO) {
-              CShaderPrg* shaderPrg =
-                  G->ShaderMgr->Enable_DefaultShader(info->pass);
-              if (shaderPrg) {
-                shaderPrg->SetLightingEnabled(0);
-
-                CGORender(ms->shaderCGO.get(), ColorGet(G, I->Color), nullptr,
-                          nullptr, info, nullptr);
-                shaderPrg->Disable();
-              }
-            }
-          }
         }
       }
 
@@ -670,8 +598,6 @@ void ObjectMap::render(RenderInfo* info) {
                 }
               }
             } else if (G->HaveGUI && G->ValidContext) {
-              if (pick) {
-              }
             }
           }
         }

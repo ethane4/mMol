@@ -294,12 +294,8 @@ def poll():
     so a sequence row for it is dead weight whose residue cells select atoms you
     cannot see. See `_visible_objects`.
     """
-    import json
     from mmol import tmp as mmol_tmp
-    data = _build(_visible_objects())
-    p = mmol_tmp.channel_path('pymol_seq')
-    with open(p, 'w') as f:
-        f.write(json.dumps(data))
+    mmol_tmp.write_json('pymol_seq', _build(_visible_objects()))
 
 
 def poll_selection():
@@ -310,7 +306,6 @@ def poll_selection():
     view selected. The keys come from one C++ pass over the atoms
     (`selection_residue_keys`) rather than an iterate over the session.
     """
-    import json
     from mmol import tmp as mmol_tmp
     keys = []
     try:
@@ -319,6 +314,5 @@ def poll_selection():
                 keys = cmd._cmd.selection_residue_keys(cmd._COb, 'sele')
     except Exception:
         pass
-    with open(mmol_tmp.channel_path('pymol_seqsel'), 'w') as f:
-        f.write(json.dumps(keys))
+    mmol_tmp.write_json('pymol_seqsel', keys)
     print('SEQSEL:ready')

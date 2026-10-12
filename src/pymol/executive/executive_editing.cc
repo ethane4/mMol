@@ -1219,14 +1219,6 @@ pymol::Result<> ExecutiveBond(PyMOLGlobals* G, const char* s1, const char* s2,
  * @return pymol::make_error with conditionally filled message
  */
 
-template <typename... Ts>
-static pymol::Error ErrorMsgIfQuiet(bool quiet, Ts&&... msgs) {
-  if (!quiet) {
-    return pymol::make_error(std::forward<Ts>(msgs)...);
-  } else {
-    return pymol::make_error("");
-  }
-}
 pymol::Result<float> ExecutiveAngle(PyMOLGlobals* G, const char* nam,
                                     const char* s1, const char* s2,
                                     const char* s3, int mode, int labels,

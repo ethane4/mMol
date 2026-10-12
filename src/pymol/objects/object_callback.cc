@@ -48,7 +48,6 @@ void ObjectCallback::render(RenderInfo* info) {
   auto I = this;
   int state = info->state;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   const RenderPass pass = info->pass;
   PyMOLGlobals* G = I->G;
   ObjectCallbackState* sobj = nullptr;
@@ -68,7 +67,7 @@ void ObjectCallback::render(RenderInfo* info) {
         */
     return;
 
-  if (ray || pick) return;
+  if (ray) return;
 
   if (!(G->HaveGUI && G->ValidContext)) return;
 

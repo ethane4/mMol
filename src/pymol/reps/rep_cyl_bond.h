@@ -22,6 +22,5 @@ struct CoordSet;
 struct RenderInfo;
 
 Rep* RepCylBondNew(CoordSet* cset, int state);
-void RepCylBondRenderImmediate(CoordSet* cs, RenderInfo* info);
 
 #endif

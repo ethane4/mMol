@@ -31,7 +31,9 @@ extension PyMOLEngine {
     switch t {
     case .render: runPython("from mmol import render_options as _ro\n_ro.end(close=True)")
     case .mutagenesis: endMutagenesis()
-    case .claude: ClaudeSession.shared.stop()
+    case .claude:
+      ClaudeSession.shared.stop()
+      if MCPServerManager.shared.isRunning { MCPServerManager.shared.stop() }
     default: break
     }
   }

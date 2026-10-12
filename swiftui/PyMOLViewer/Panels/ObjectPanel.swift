@@ -37,8 +37,6 @@ private let kSidechainPred =
   "(sidechain or name CA or (name N and neighbor (sidechain and not hydro)))"
 
 // MARK: - Representation inspector: polled state models
-// (Inlined here rather than a separate file so they're in both app targets
-// without editing the Xcode project's explicit file references.)
 
 /// One active representation on an object, with current setting values + color.
 struct RepState: Equatable {
@@ -83,261 +81,6 @@ struct ObjStateMeta: Equatable {
   }
 }
 
-// MARK: - Representation inspector: control metadata
-
-enum RepControlKind {
-  case slider, segmented, toggle, color
-}
-
-/// One controllable property row (label + control bound to a PyMOL setting).
-struct RepProperty: Identifiable {
-  var id: String { setting }
-  let setting: String
-  let label: String
-  let kind: RepControlKind
-  var min: Double = 0
-  var max: Double = 1
-  var step: Double = 0.01
-  var decimals: Int = 2
-  var options: [(label: String, value: Double)] = []  // for .segmented
-  // Apply only on release (not on every live drag tick). For settings whose
-  // change forces an expensive rebuild (e.g. solvent_radius re-tessellates the
-  // whole surface), live updates would recompute on every drag step.
-  var commitOnly: Bool = false
-}
-
-/// Static description of a representation: display name, color-override setting
-/// (empty = no per-rep color), and the property rows it exposes. Setting names
-/// MUST match modules/mmol/inspector.py.
-struct RepSpec {
-  let rep: String
-  let display: String
-  let colorSetting: String  // e.g. "surface_color"; "" if none
-  let defaultColor: Int  // value meaning "inherit" (-1, labels -6)
-  let properties: [RepProperty]
-}
-
-enum RepCatalog {
-  static let order = [
-    "cartoon", "surface", "sticks", "spheres", "ribbon",
-    "mesh", "lines", "dots", "nonbonded", "nb_spheres", "labels",
-  ]
-
-  static let specs: [String: RepSpec] = [
-    "cartoon": RepSpec(
-      rep: "cartoon", display: "Cartoon",
-      colorSetting: "cartoon_color", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "cartoon_transparency", label: "Transparency", kind: .slider),
-        RepProperty(setting: "cartoon_loop_radius", label: "Loop radius", kind: .slider),
-        RepProperty(setting: "cartoon_tube_radius", label: "Tube radius", kind: .slider),
-        RepProperty(setting: "cartoon_fancy_helices", label: "Fancy helices", kind: .toggle),
-        RepProperty(setting: "cartoon_flat_sheets", label: "Flat sheets", kind: .toggle),
-        RepProperty(setting: "cartoon_spline", label: "Spline ribbon", kind: .toggle),
-      ]),
-    "surface": RepSpec(
-      rep: "surface", display: "Surface",
-      colorSetting: "surface_color", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "transparency", label: "Transparency", kind: .slider),
-        RepProperty(
-          setting: "surface_quality", label: "Quality", kind: .segmented,
-          options: [("0", 0), ("1", 1), ("2", 2)]),
-        RepProperty(
-          setting: "solvent_radius", label: "Solvent radius", kind: .slider, min: 0.5, max: 3,
-          step: 0.1, decimals: 1, commitOnly: true),
-        RepProperty(
-          setting: "surface_clip_front", label: "Clip front", kind: .slider, min: 0, max: 1,
-          step: 0.02, decimals: 2),
-        RepProperty(
-          setting: "surface_clip_back", label: "Clip back", kind: .slider, min: 0, max: 1,
-          step: 0.02, decimals: 2),
-        RepProperty(setting: "metal_interior_cap", label: "Solid interior", kind: .toggle),
-        RepProperty(setting: "surface_contour", label: "Contour", kind: .toggle),
-        RepProperty(
-          setting: "surface_contour_width", label: "Contour width", kind: .slider, min: 0.5, max: 6,
-          step: 0.5, decimals: 1),
-        RepProperty(setting: "surface_contour_color", label: "Contour color", kind: .color),
-        RepProperty(setting: "surface_contour_opaque", label: "Contour opaque", kind: .toggle),
-      ]),
-    "sticks": RepSpec(
-      rep: "sticks", display: "Sticks",
-      colorSetting: "stick_color", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "stick_transparency", label: "Transparency", kind: .slider),
-        RepProperty(setting: "stick_radius", label: "Radius", kind: .slider),
-        RepProperty(setting: "stick_h_scale", label: "H scale", kind: .slider),
-        RepProperty(setting: "metal_interior_cap", label: "Solid interior", kind: .toggle),
-      ]),
-    "spheres": RepSpec(
-      rep: "spheres", display: "Spheres",
-      colorSetting: "sphere_color", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "sphere_transparency", label: "Transparency", kind: .slider),
-        RepProperty(setting: "sphere_scale", label: "Scale", kind: .slider, max: 3, step: 0.05),
-        RepProperty(setting: "metal_interior_cap", label: "Solid interior", kind: .toggle),
-      ]),
-    "ribbon": RepSpec(
-      rep: "ribbon", display: "Ribbon",
-      colorSetting: "ribbon_color", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "ribbon_transparency", label: "Transparency", kind: .slider),
-        RepProperty(
-          setting: "ribbon_width", label: "Width", kind: .slider, max: 20, step: 0.1, decimals: 1),
-      ]),
-    "mesh": RepSpec(
-      rep: "mesh", display: "Mesh",
-      colorSetting: "mesh_color", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "transparency", label: "Transparency", kind: .slider),
-        RepProperty(setting: "mesh_width", label: "Width", kind: .slider, max: 2, step: 0.05),
-      ]),
-    "lines": RepSpec(
-      rep: "lines", display: "Lines",
-      colorSetting: "line_color", defaultColor: -1,
-      properties: [
-        RepProperty(
-          setting: "line_width", label: "Width", kind: .slider, min: 0.5, max: 10, step: 0.5,
-          decimals: 1)
-      ]),
-    "dots": RepSpec(
-      rep: "dots", display: "Dots",
-      colorSetting: "dot_color", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "transparency", label: "Transparency", kind: .slider),
-        RepProperty(
-          setting: "dot_density", label: "Density", kind: .segmented,
-          options: [("0", 0), ("1", 1), ("2", 2), ("3", 3)]),
-        RepProperty(setting: "dot_radius", label: "Radius", kind: .slider, max: 1, step: 0.05),
-      ]),
-    "nonbonded": RepSpec(
-      rep: "nonbonded", display: "Nonbonded",
-      colorSetting: "", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "nonbonded_size", label: "Size", kind: .slider, max: 1, step: 0.05)
-      ]),
-    "nb_spheres": RepSpec(
-      rep: "nb_spheres", display: "NB spheres",
-      colorSetting: "", defaultColor: -1,
-      properties: [
-        RepProperty(setting: "nb_spheres_size", label: "Size", kind: .slider, max: 1, step: 0.05)
-      ]),
-    "labels": RepSpec(
-      rep: "labels", display: "Labels",
-      colorSetting: "label_color", defaultColor: -6,
-      properties: [
-        RepProperty(
-          setting: "label_size", label: "Size", kind: .slider, min: 5, max: 40, step: 1, decimals: 0
-        )
-      ]),
-  ]
-
-  static func spec(_ rep: String) -> RepSpec? { specs[rep] }
-  static func display(_ rep: String) -> String { specs[rep]?.display ?? rep }
-}
-
-// MARK: - Scene (global) parameter table
-
-struct SceneParam: Identifiable {
-  var id: String { setting }
-  let setting: String
-  let label: String
-  let kind: RepControlKind
-  var min: Double = 0
-  var max: Double = 1
-  var step: Double = 1
-  var decimals: Int = 0
-  var options: [(label: String, value: Double)] = []
-  let group: String
-  // When set, this control is a dependent sub-setting: shown indented under
-  // its parent toggle and hidden while the parent (a setting key) is off.
-  var dependsOn: String? = nil
-  // The Outline color row binds to sceneState.outlineColor via a ColorPicker
-  // instead of the kind switch.
-  var isColor: Bool = false
-  // One-line description shown in a (?) popover next to the control.
-  var help: String = ""
-}
-
-enum SceneCatalog {
-  // Ordered sub-groups of the Viewer Settings tab. Background, depth cue and the
-  // ray lighting live in Render Options.
-  static let groups = [
-    "Canvas", "Camera", "Lighting", "Shadows & AO", "Metal optimization", "Effects", "Quality",
-  ]
-
-  static let params: [SceneParam] = [
-    // --- Canvas: multi-object/state layout ---
-    // grid_mode is an int (0=off, 1=by object, 2=by state); the toggle maps
-    // off→0 / on→1 and reads on for any non-zero mode.
-    SceneParam(
-      setting: "grid_mode", label: "Grid", kind: .toggle, group: "Canvas",
-      help: "Lay each object out in its own grid cell instead of overlaid in one view."),
-    SceneParam(
-      setting: "all_states", label: "Overlay all states", kind: .toggle, group: "Canvas",
-      help: "Show every coordinate state (NMR models / trajectory frames) at once."),
-    // Not a PyMOL setting — bound to engine.hoverPreviewEnabled (see SceneParamRow's
-    // special-case) and persisted across launches.
-    SceneParam(
-      setting: "hover_indicator", label: "Hover indicator", kind: .toggle, group: "Canvas",
-      help:
-        "Highlight the residue under the cursor (nearest Cα) before you click, in a distinct cyan — without changing the selection. Persists across launches."
-    ),
-
-    // --- Camera: viewpoint + lens ---
-    SceneParam(
-      setting: "field_of_view", label: "Lens (mm)", kind: .slider, min: 12, max: 135, step: 0.5,
-      decimals: 0, group: "Camera",
-      help:
-        "Focal length (35mm-equivalent). Like swapping physical lenses: the camera dollies to keep the subject framed, so a short/wide lens (~12mm) exaggerates perspective (fisheye) and a long lens (~135mm) flattens it (macro/telephoto). Drag for a live, continuous perspective change. Pinch to zoom. No effect in orthoscopic mode."
-    ),
-    SceneParam(
-      setting: "zoom", label: "Zoom (×)", kind: .slider, min: 0.5, max: 8, step: 0.1, decimals: 1,
-      group: "Camera",
-      help:
-        "Apparent magnification — dollies the camera closer/farther. ~1× fits the whole scene; higher zooms in. Independent of the Lens: changing perspective (dolly-zoom) leaves this put, and vice-versa. Pinch to zoom also updates it."
-    ),
-    SceneParam(
-      setting: "ortho", label: "Orthographic", kind: .toggle, group: "Camera",
-      help: "Orthographic (parallel) projection — no perspective. Disables the Lens control."),
-
-    // --- Lighting: real-time shading ---
-    SceneParam(
-      setting: "shininess", label: "Shininess", kind: .slider, min: 0, max: 100, step: 1,
-      decimals: 0, group: "Lighting",
-      help: "Tightness of specular highlights. Higher = smaller, sharper glints."),
-
-    // --- Shadows & AO: screen-space occlusion ---
-    SceneParam(
-      setting: "metal_ssao", label: "Ambient occlusion", kind: .toggle, group: "Shadows & AO",
-      help: "Screen-space ambient occlusion — darkens crevices and contact points for depth."),
-
-    // --- Metal optimization: GPU quality/perf knobs ---
-    SceneParam(
-      setting: "metal_msaa", label: "MSAA 4×", kind: .toggle, group: "Metal optimization",
-      help: "4× multisample antialiasing — smoother edges at some GPU cost."),
-
-    // --- Effects: stylization + post-processing ---
-    SceneParam(
-      setting: "metal_outline", label: "Outline", kind: .toggle, group: "Effects",
-      help: "Draw a silhouette / toon outline around objects."),
-    SceneParam(
-      setting: "metal_outline_color", label: "Outline color", kind: .toggle, group: "Effects",
-      dependsOn: "metal_outline", isColor: true,
-      help: "Color of the outline contour."),
-    SceneParam(
-      setting: "metal_outline_width", label: "Outline width", kind: .slider, min: 0.5, max: 5.0,
-      step: 0.1, decimals: 1, group: "Effects", dependsOn: "metal_outline",
-      help: "Thickness of the outline, in pixels."),
-
-    // --- Quality: tessellation ---
-    SceneParam(
-      setting: "surface_quality", label: "Surface quality", kind: .segmented,
-      options: [("0", 0), ("1", 1), ("2", 2)], group: "Quality",
-      help: "Surface mesh detail: 0 = coarse/fast, 2 = fine/slow."),
-  ]
-}
-
 // MARK: - Data Models
 
 /// Represents a PyMOL object or selection in the panel
@@ -350,10 +93,6 @@ struct ObjectEntry: Identifiable, Equatable {
   // Number of coordinate states (NMR models / trajectory frames). >1 surfaces
   // the per-object STATE controls in the inspector. Defaults to 1.
   var stateCount: Int = 1
-  // True when an active rep has per-atom transparency overrides — drives the
-  // discoverability badge, since the object-level transparency slider then
-  // doesn't reflect what's rendered. See appkit_inspector.object_has_atom_transp.
-  var hasAtomTransp: Bool = false
   // Group tree (#255). `isGroup` marks an `object:group`; `parent` is the name
   // of the group this row lives in (nil = top level). Both default so the
   // existing memberwise initializers keep compiling.
@@ -501,226 +240,6 @@ private let labelOptions: [(label: String, expr: String?)] = [
   ("Segments", "segi"),
   ("Atoms", "name"),
   ("Elements", "elem"),
-]
-
-/// One named PyMOL color and its sRGB value, mirrored from the core color
-/// table (src/pymol/settings/color.cc) so the menu swatch matches what `color <name>`
-/// actually paints.
-struct PyMOLNamedColor: Equatable {
-  let name: String
-  let red: Double
-  let green: Double
-  let blue: Double
-  var swatch: Color { Color(.sRGB, red: red, green: green, blue: blue) }
-}
-
-/// One hue family of desktop PyMOL's two-level color menu (#379).
-struct PyMOLColorFamily {
-  let label: String
-  let shades: [PyMOLNamedColor]
-  /// The family entry is tinted with its first (canonical) shade, exactly
-  /// like upstream menu.py, which colors the family label with `c_list[0]`.
-  var swatch: Color { shades[0].swatch }
-}
-
-/// Desktop PyMOL's tiered color menu — `all_colors_list` in
-/// modules/pymol/menu.py — surfaced in the SwiftUI "C" menu as one submenu per
-/// hue family (#379). Family order and membership mirror upstream (a few
-/// shades, e.g. limon and wheat, deliberately appear in two families there);
-/// the RGB values are the core's, so no colors are invented here.
-enum PyMOLColorMenu {
-  static let families: [PyMOLColorFamily] = [
-    PyMOLColorFamily(
-      label: "reds",
-      shades: [
-        PyMOLNamedColor(name: "red", red: 1.0, green: 0.0, blue: 0.0),
-        PyMOLNamedColor(name: "tv_red", red: 1.0, green: 0.2, blue: 0.2),
-        PyMOLNamedColor(name: "raspberry", red: 0.7, green: 0.3, blue: 0.4),
-        PyMOLNamedColor(name: "darksalmon", red: 0.73, green: 0.55, blue: 0.52),
-        PyMOLNamedColor(name: "salmon", red: 1.0, green: 0.6, blue: 0.6),
-        PyMOLNamedColor(name: "deepsalmon", red: 1.0, green: 0.5, blue: 0.5),
-        PyMOLNamedColor(name: "warmpink", red: 0.85, green: 0.2, blue: 0.5),
-        PyMOLNamedColor(name: "firebrick", red: 0.698, green: 0.13, blue: 0.13),
-        PyMOLNamedColor(name: "ruby", red: 0.6, green: 0.2, blue: 0.2),
-        PyMOLNamedColor(name: "chocolate", red: 0.555, green: 0.222, blue: 0.111),
-        PyMOLNamedColor(name: "brown", red: 0.65, green: 0.32, blue: 0.17),
-      ]),
-    PyMOLColorFamily(
-      label: "greens",
-      shades: [
-        PyMOLNamedColor(name: "green", red: 0.0, green: 1.0, blue: 0.0),
-        PyMOLNamedColor(name: "tv_green", red: 0.2, green: 1.0, blue: 0.2),
-        PyMOLNamedColor(name: "chartreuse", red: 0.5, green: 1.0, blue: 0.0),
-        PyMOLNamedColor(name: "splitpea", red: 0.52, green: 0.75, blue: 0.0),
-        PyMOLNamedColor(name: "smudge", red: 0.55, green: 0.7, blue: 0.4),
-        PyMOLNamedColor(name: "palegreen", red: 0.65, green: 0.9, blue: 0.65),
-        PyMOLNamedColor(name: "limegreen", red: 0.0, green: 1.0, blue: 0.5),
-        PyMOLNamedColor(name: "lime", red: 0.5, green: 1.0, blue: 0.5),
-        PyMOLNamedColor(name: "limon", red: 0.75, green: 1.0, blue: 0.25),
-        PyMOLNamedColor(name: "forest", red: 0.2, green: 0.6, blue: 0.2),
-      ]),
-    PyMOLColorFamily(
-      label: "blues",
-      shades: [
-        PyMOLNamedColor(name: "blue", red: 0.0, green: 0.0, blue: 1.0),
-        PyMOLNamedColor(name: "tv_blue", red: 0.3, green: 0.3, blue: 1.0),
-        PyMOLNamedColor(name: "marine", red: 0.0, green: 0.5, blue: 1.0),
-        PyMOLNamedColor(name: "slate", red: 0.5, green: 0.5, blue: 1.0),
-        PyMOLNamedColor(name: "lightblue", red: 0.75, green: 0.75, blue: 1.0),
-        PyMOLNamedColor(name: "skyblue", red: 0.2, green: 0.5, blue: 0.8),
-        PyMOLNamedColor(name: "purpleblue", red: 0.5, green: 0.0, blue: 1.0),
-        PyMOLNamedColor(name: "deepblue", red: 0.25, green: 0.25, blue: 0.65),
-        PyMOLNamedColor(name: "density", red: 0.1, green: 0.1, blue: 0.6),
-      ]),
-    PyMOLColorFamily(
-      label: "yellows",
-      shades: [
-        PyMOLNamedColor(name: "yellow", red: 1.0, green: 1.0, blue: 0.0),
-        PyMOLNamedColor(name: "tv_yellow", red: 1.0, green: 1.0, blue: 0.2),
-        PyMOLNamedColor(name: "paleyellow", red: 1.0, green: 1.0, blue: 0.5),
-        PyMOLNamedColor(name: "yelloworange", red: 1.0, green: 0.87, blue: 0.37),
-        PyMOLNamedColor(name: "limon", red: 0.75, green: 1.0, blue: 0.25),
-        PyMOLNamedColor(name: "wheat", red: 0.99, green: 0.82, blue: 0.65),
-        PyMOLNamedColor(name: "sand", red: 0.72, green: 0.55, blue: 0.3),
-      ]),
-    PyMOLColorFamily(
-      label: "magentas",
-      shades: [
-        PyMOLNamedColor(name: "magenta", red: 1.0, green: 0.0, blue: 1.0),
-        PyMOLNamedColor(name: "lightmagenta", red: 1.0, green: 0.2, blue: 0.8),
-        PyMOLNamedColor(name: "hotpink", red: 1.0, green: 0.0, blue: 0.5),
-        PyMOLNamedColor(name: "pink", red: 1.0, green: 0.65, blue: 0.85),
-        PyMOLNamedColor(name: "lightpink", red: 1.0, green: 0.75, blue: 0.87),
-        PyMOLNamedColor(name: "dirtyviolet", red: 0.7, green: 0.5, blue: 0.5),
-        PyMOLNamedColor(name: "violet", red: 1.0, green: 0.5, blue: 1.0),
-        PyMOLNamedColor(name: "violetpurple", red: 0.55, green: 0.25, blue: 0.6),
-        PyMOLNamedColor(name: "purple", red: 0.75, green: 0.0, blue: 0.75),
-        PyMOLNamedColor(name: "deeppurple", red: 0.6, green: 0.1, blue: 0.6),
-      ]),
-    PyMOLColorFamily(
-      label: "cyans",
-      shades: [
-        PyMOLNamedColor(name: "cyan", red: 0.0, green: 1.0, blue: 1.0),
-        PyMOLNamedColor(name: "palecyan", red: 0.8, green: 1.0, blue: 1.0),
-        PyMOLNamedColor(name: "aquamarine", red: 0.5, green: 1.0, blue: 1.0),
-        PyMOLNamedColor(name: "greencyan", red: 0.25, green: 1.0, blue: 0.75),
-        PyMOLNamedColor(name: "teal", red: 0.0, green: 0.75, blue: 0.75),
-        PyMOLNamedColor(name: "deepteal", red: 0.1, green: 0.6, blue: 0.6),
-        PyMOLNamedColor(name: "lightteal", red: 0.4, green: 0.7, blue: 0.7),
-      ]),
-    PyMOLColorFamily(
-      label: "oranges",
-      shades: [
-        PyMOLNamedColor(name: "orange", red: 1.0, green: 0.5, blue: 0.0),
-        PyMOLNamedColor(name: "tv_orange", red: 1.0, green: 0.55, blue: 0.15),
-        PyMOLNamedColor(name: "brightorange", red: 1.0, green: 0.7, blue: 0.2),
-        PyMOLNamedColor(name: "lightorange", red: 1.0, green: 0.8, blue: 0.5),
-        PyMOLNamedColor(name: "yelloworange", red: 1.0, green: 0.87, blue: 0.37),
-        PyMOLNamedColor(name: "olive", red: 0.77, green: 0.7, blue: 0.0),
-        PyMOLNamedColor(name: "deepolive", red: 0.6, green: 0.6, blue: 0.1),
-      ]),
-    PyMOLColorFamily(
-      label: "tints",
-      shades: [
-        PyMOLNamedColor(name: "wheat", red: 0.99, green: 0.82, blue: 0.65),
-        PyMOLNamedColor(name: "palegreen", red: 0.65, green: 0.9, blue: 0.65),
-        PyMOLNamedColor(name: "lightblue", red: 0.75, green: 0.75, blue: 1.0),
-        PyMOLNamedColor(name: "paleyellow", red: 1.0, green: 1.0, blue: 0.5),
-        PyMOLNamedColor(name: "lightpink", red: 1.0, green: 0.75, blue: 0.87),
-        PyMOLNamedColor(name: "palecyan", red: 0.8, green: 1.0, blue: 1.0),
-        PyMOLNamedColor(name: "lightorange", red: 1.0, green: 0.8, blue: 0.5),
-        PyMOLNamedColor(name: "bluewhite", red: 0.85, green: 0.85, blue: 1.0),
-      ]),
-    PyMOLColorFamily(
-      label: "grays",
-      shades: [
-        PyMOLNamedColor(name: "white", red: 1.0, green: 1.0, blue: 1.0),
-        PyMOLNamedColor(name: "gray90", red: 0.909, green: 0.909, blue: 0.909),
-        PyMOLNamedColor(name: "gray80", red: 0.808, green: 0.808, blue: 0.808),
-        PyMOLNamedColor(name: "gray70", red: 0.707, green: 0.707, blue: 0.707),
-        PyMOLNamedColor(name: "gray60", red: 0.606, green: 0.606, blue: 0.606),
-        PyMOLNamedColor(name: "gray50", red: 0.505, green: 0.505, blue: 0.505),
-        PyMOLNamedColor(name: "gray40", red: 0.404, green: 0.404, blue: 0.404),
-        PyMOLNamedColor(name: "gray30", red: 0.303, green: 0.303, blue: 0.303),
-        PyMOLNamedColor(name: "gray20", red: 0.202, green: 0.202, blue: 0.202),
-        PyMOLNamedColor(name: "gray10", red: 0.101, green: 0.101, blue: 0.101),
-        PyMOLNamedColor(name: "black", red: 0.0, green: 0.0, blue: 0.0),
-      ]),
-  ]
-
-  /// Every distinct named color in the table, in menu order.
-  static var allColorNames: [String] {
-    var seen = Set<String>()
-    return families.flatMap(\.shades).map(\.name).filter { seen.insert($0).inserted }
-  }
-
-  /// Look up a named color anywhere in the tiered table.
-  static func color(named name: String) -> PyMOLNamedColor? {
-    for family in families {
-      if let c = family.shades.first(where: { $0.name == name }) { return c }
-    }
-    return nil
-  }
-
-  /// Classic `gray` (0.5) is not in upstream's family table (which lists the
-  /// gray10…gray90 ramp), but it is the color people reach for, so it heads
-  /// the grays row.
-  static let gray = PyMOLNamedColor(name: "gray", red: 0.5, green: 0.5, blue: 0.5)
-
-  /// The rows of the "C" menu's color section (#379). Like desktop PyMOL's
-  /// object-panel popup, each row IS a color — clicking "red" paints red —
-  /// and the same row expands (arrow) into that hue's named variants. Rows
-  /// without a natural base color (tints) are plain submenus.
-  static let rows: [PyMOLColorMenuRow] = {
-    let base: [String: PyMOLNamedColor?] = [
-      "reds": color(named: "red"),
-      "greens": color(named: "green"),
-      "blues": color(named: "blue"),
-      "yellows": color(named: "yellow"),
-      "magentas": color(named: "magenta"),
-      "cyans": color(named: "cyan"),
-      "oranges": color(named: "orange"),
-      "tints": nil,
-      "grays": gray,
-    ]
-    return families.map { PyMOLColorMenuRow(family: $0, primary: base[$0.label] ?? nil) }
-  }()
-}
-
-/// One row of the color section: a hue family plus the color a click on the
-/// row itself applies (nil = the row only expands).
-struct PyMOLColorMenuRow {
-  let family: PyMOLColorFamily
-  let primary: PyMOLNamedColor?
-  /// What the row reads: the base color's name when clickable, else the
-  /// family's name.
-  var title: String { primary?.name ?? family.label }
-  var swatch: Color { primary?.swatch ?? family.swatch }
-}
-
-/// Color options with optional swatch color
-struct ColorOption {
-  let label: String
-  let command: String?
-  let swatch: Color?
-
-}
-
-/// The coloring modes at the top of the "C" menu. The colors themselves follow
-/// as PyMOLColorMenu.rows (click = base color, expand = its variants), so the
-/// old flat red…white list is gone — it duplicated the rows (#379).
-let colorOptions: [ColorOption] = [
-  ColorOption(label: "by element", command: "util.cnc", swatch: nil),
-  ColorOption(label: "by chain", command: "util.cbc", swatch: nil),
-  ColorOption(label: "by ss", command: "util.cbss", swatch: nil),
-  ColorOption(label: "spectrum", command: "spectrum", swatch: nil),
-  // Desktop PyMOL's C ▸ spectrum ▸ rainbow and C ▸ by chain ▸ chainbows
-  // (modules/pymol/menu.py): blue at the N-terminus through to red at the C.
-  ColorOption(label: "rainbow", command: "rainbow", swatch: nil),
-  ColorOption(label: "chainbows", command: "util.chainbow", swatch: nil),
-  ColorOption(label: "by b-factor", command: "spectrum_b", swatch: nil),
-  // Colour from a CSV column; edited afterwards in the object's ▸ heatmap chip.
-  ColorOption(label: "by file…", command: "by_file", swatch: nil),
 ]
 
 // MARK: - Action Menu Structure
@@ -1014,207 +533,6 @@ func actionMenuItems(isSelection: Bool, isGroup: Bool = false, isMap: Bool = fal
   return items
 }
 
-// MARK: - Copy / Extract command builders (#461, #468)
-
-/// How far an Extract reaches beyond the selection itself.
-///
-/// The widened variants copy the bonded neighbourhood into the new object but
-/// still remove only the *selected* atoms from the source — that asymmetry is
-/// upstream's (`modules/pymol/menu.py:47`), and it is what makes "extend 1"
-/// useful for pulling a ligand out with the residues it touches.
-enum ExtractScope: String, CaseIterable {
-  case object
-  case extend1
-  case byresExtend1
-
-  /// The selection the new object is built from.
-  fileprivate func createSelection(for sele: String) -> String {
-    switch self {
-    case .object: return "(\(sele))"
-    case .extend1: return "((\(sele)) extend 1)"
-    case .byresExtend1: return "(byres ((\(sele)) extend 1))"
-    }
-  }
-}
-
-/// Command for "Copy to Object ▸ <existing object>" (#461).
-///
-/// `copy_to` merges the atoms into an existing object and renames chain/segi/ID
-/// so they cannot collide with what is already there; the source object keeps
-/// its atoms. `quiet=0` so the " Copied N atoms to object X" line lands in the
-/// console feed — the panel gives no other confirmation that anything happened.
-///
-/// Wrapped in a python block to undo one thing `copy_to` does on its own: it
-/// disables every object the selection lives in (`modules/pymol/editing.py:3309`)
-/// so the merged result stands out. On the desktop that is a momentary thing in a
-/// menu; here the source's row stays in the panel with its checkbox silently
-/// clearing, right after a menu item that promises a *copy* — it reads as the
-/// copy having eaten the original. So the enabled sources are captured first and
-/// switched back on afterwards. Sources that were already hidden stay hidden.
-func copyToObjectCommand(sele: String, target: String) -> String {
-  let capture =
-    "_on = [o for o in cmd.get_object_list(\"(\(sele))\") "
-    + "if o in cmd.get_names(\"objects\", enabled_only=1)]"
-  let copy = "cmd.copy_to(\"\(target)\", \"(\(sele))\", zoom=0, quiet=0)"
-  let restore = "[cmd.enable(o) for o in _on]"
-  return "python\n\(capture); \(copy); \(restore)\npython end"
-}
-
-/// Command for "Copy to Object ▸ New Object…" (#461).
-///
-/// Upstream is `cmd.create(None, sele, zoom=0)`, letting PyMOL auto-name the
-/// result; here the name comes from the modal instead, so the copy can be
-/// labelled at the moment it is made. `zoom=0` keeps the camera still — the new
-/// object sits exactly on top of the atoms it was copied from, so framing it
-/// would be a jump to nowhere.
-func copyToNewObjectCommand(sele: String, name: String) -> String {
-  "create \(name), (\(sele)), zoom=0"
-}
-
-/// Command for "Extract ▸ …" (#468) — move the selected atoms out of their
-/// parent object into a new one.
-///
-/// Routed through a `python` block rather than the `extract` console keyword
-/// because that keyword needs a name and this deliberately passes `None`, which
-/// makes PyMOL's own `get_unused_name("obj")` mint `obj01`, `obj02`, … exactly
-/// as the desktop menu item does.
-///
-/// Two notes on the widened variants:
-///
-/// - they must spell the extract selection out (`extract="<sele>"`) instead of
-///   the boolean `extract=1`, because the atoms to remove are a *subset* of the
-///   atoms to copy. `cmd.create` calls that form deprecated and says so on the
-///   console; upstream's menu has the same wart and the alternative is losing
-///   the feature.
-/// - the trailing `delete` drops the selection itself. `cmd.extract` only
-///   cleans up its own temporary, so the user's named selection would survive
-///   with every one of its atoms gone — a 0-atom row in the panel that still
-///   looks live. This mirrors what "Remove Atoms" already does.
-func extractCommand(sele: String, scope: ExtractScope) -> String {
-  let create: String
-  switch scope {
-  case .object:
-    // Selection == extraction target, so `cmd.extract` (which is `create`
-    // with the boolean `extract=1`) covers it without the deprecated form.
-    create = "cmd.extract(None, \"\(scope.createSelection(for: sele))\", zoom=0)"
-  case .extend1, .byresExtend1:
-    create =
-      "cmd.create(None, \"\(scope.createSelection(for: sele))\", "
-      + "extract=\"\(sele)\", zoom=0)"
-  }
-  return "python\n\(create); cmd.delete(\"\(sele)\")\npython end"
-}
-
-/// Mirror of PyMOL's `ExecutiveGetUnusedName(G, "obj")`
-/// (`src/pymol/executive/executive.cc:3553` → `ExecutiveMakeUnusedName`, pattern `%02d`
-/// starting at 1): the first `objNN` no existing name has taken.
-///
-/// Computed here rather than asked of the engine so the "New Object…" modal can
-/// be prefilled the instant it opens. `existing` should be every name PyMOL
-/// knows — objects, selections and groups all share one namespace.
-func defaultNewObjectName(existing: [String]) -> String {
-  let taken = Set(existing)
-  var n = 1
-  while true {
-    let candidate = String(format: "obj%02d", n)
-    if !taken.contains(candidate) { return candidate }
-    n += 1
-  }
-}
-
-/// PyMOL's own legal-name character set: A–Z, a–z, 0–9 and `+ - . ^ _`
-/// (`ObjectMakeValidName`, src/pymol/objects/pymol_object.cc).
-///
-/// Enforced up front rather than left to the engine because the engine's
-/// response to an illegal name is to quietly rewrite it — type `my obj!` and you
-/// get an object called `my_obj` — so the name in the panel is not the name that
-/// was asked for. A comma is worse than cosmetic: it splits the command into a
-/// different argument list and `create foo, bar, (sele), zoom=0` throws a Python
-/// traceback into the console feed.
-func isLegalObjectName(_ name: String) -> Bool {
-  !name.isEmpty
-    && name.allSatisfy { c in
-      guard c.isASCII else { return false }
-      return c.isLetter || c.isNumber || "+-.^_".contains(c)
-    }
-}
-
-/// Whether `token` can be interpolated into a PyMOL command without splitting
-/// it (#531), for strings that are NOT object names and so may legitimately
-/// fall outside isLegalObjectName: scene names (spaces allowed) and a group
-/// name the user is typing. Refuses exactly what can end or split a command: control
-/// characters and every line break `cmd.do` splits on (str.splitlines), `;`
-/// (PyMOL's command separator), `,` (its argument separator), and `\` -- a
-/// line ending in a backslash is a continuation, so PyMOL would merge the
-/// NEXT command into this one and lose both.
-func isCommandSafeToken(_ token: String) -> Bool {
-  !token.isEmpty
-    && token.unicodeScalars.allSatisfy { u in
-      switch u.value {
-      case 0x00...0x1F, 0x7F, 0x85, 0x2028, 0x2029: return false
-      case 0x3B, 0x2C, 0x5C: return false  // ; , backslash
-      default: return true
-      }
-    }
-}
-
-extension PyMOLEngine {
-  /// Run a command built by interpolating NAMES into PyMOL command language
-  /// (#531).
-  ///
-  /// Every object, selection and group name the Inspector shows came from
-  /// PyMOL, and with `validate_object_names` on (the default)
-  /// ObjectMakeValidName keeps them inside `[A-Za-z0-9+-.^_]`. With it off,
-  /// a name can carry a line break, `;` or `,`, and interpolated raw it would
-  /// split the command -- running its tail as commands of its own. PyMOL
-  /// command language has no general quoting, so rather than escape each of
-  /// ~60 builders, refuse the command when a name is outside PyMOL's own
-  /// alphabet (`naming:`), or when a non-object token -- a scene name, a
-  /// group name the user typed -- contains anything that can split a
-  /// command (`tokens:`, see isCommandSafeToken). The console says why
-  /// without echoing the name. Every legal name passes, so in the ordinary
-  /// case every command runs exactly as it did.
-  func runCommand(_ command: String, naming names: String..., tokens: [String] = []) {
-    guard names.allSatisfy(isLegalObjectName),
-      tokens.allSatisfy(isCommandSafeToken)
-    else {
-      refuseUnsafeCommand()
-      return
-    }
-    runCommand(command)
-  }
-
-  func runCommand(_ command: String, tokens: String...) {
-    runCommand(command, tokens: Array(tokens))
-  }
-
-  func runCommand(_ command: String, tokens: [String]) {
-    guard tokens.allSatisfy(isCommandSafeToken) else {
-      refuseUnsafeCommand()
-      return
-    }
-    runCommand(command)
-  }
-
-  func refuseUnsafeCommand() {
-    runCommand(
-      "python\nprint(' Inspector: skipped an action -- a name contains "
-        + "characters a PyMOL command cannot carry (possible when "
-        + "validate_object_names is off). cmd.get_names() lists the objects; "
-        + "rename the odd one with cmd.set_name.')"
-        + "\npython end")
-  }
-}
-
-/// Whether `name` can be given to a brand-new object.
-///
-/// Legal, and not already taken: `create` against a name that already exists
-/// does *nothing at all* — no new object, no error, no console line — so an
-/// unchecked collision turns "New Object…" into a button that silently fails.
-func canNameNewObject(_ name: String, existing: [String]) -> Bool {
-  isLegalObjectName(name) && !existing.contains(name)
-}
-
 // MARK: - Command Dispatch
 
 /// A ▸ State ▸ load trajectory…: append a trajectory's frames as states.
@@ -1262,33 +580,10 @@ private func runActionCommand(_ key: String, name: String, engine: PyMOLEngine) 
   case "drag_coords": cmd = "drag (\(n))"
   case "clean": cmd = "clean \(n)"
   case "dss": cmd = "dss \(n)"
-  // Presets
-  case "preset_classified":
-    cmd = "python\nfrom pymol import preset; preset.classified('\(n)', _self=cmd)\npython end"
-  case "preset_simple":
-    cmd = "python\nfrom pymol import preset; preset.simple('\(n)', _self=cmd)\npython end"
-  case "preset_simple_no_solv":
-    cmd = "python\nfrom pymol import preset; preset.simple_no_solv('\(n)', _self=cmd)\npython end"
-  case "preset_ball_and_stick":
-    cmd = "python\nfrom pymol import preset; preset.ball_and_stick('\(n)', _self=cmd)\npython end"
-  case "preset_b_factor_putty":
-    cmd = "python\nfrom pymol import preset; preset.b_factor_putty('\(n)', _self=cmd)\npython end"
-  case "preset_technical":
-    cmd = "python\nfrom pymol import preset; preset.technical('\(n)', _self=cmd)\npython end"
-  case "preset_ligands":
-    cmd = "python\nfrom pymol import preset; preset.ligands('\(n)', _self=cmd)\npython end"
-  case "preset_pretty":
-    cmd = "python\nfrom pymol import preset; preset.pretty('\(n)', _self=cmd)\npython end"
-  case "preset_pretty_solv":
-    cmd = "python\nfrom pymol import preset; preset.pretty_solv('\(n)', _self=cmd)\npython end"
-  case "preset_publication":
-    cmd = "python\nfrom pymol import preset; preset.publication('\(n)', _self=cmd)\npython end"
-  case "preset_pub_solv":
-    cmd = "python\nfrom pymol import preset; preset.pub_solv('\(n)', _self=cmd)\npython end"
-  case "preset_interface":
-    cmd = "python\nfrom pymol import preset; preset.interface('\(n)', _self=cmd)\npython end"
-  case "preset_default":
-    cmd = "python\nfrom pymol import preset; preset.default('\(n)', _self=cmd)\npython end"
+  // Presets: the key's suffix is the pymol.preset function name.
+  case let k where k.hasPrefix("preset_"):
+    cmd =
+      "python\nfrom pymol import preset; preset.\(k.dropFirst(7))('\(n)', _self=cmd)\npython end"
   // Find
   case "find_polar_within":
     cmd =
@@ -1313,9 +608,8 @@ private func runActionCommand(_ key: String, name: String, engine: PyMOLEngine) 
   // Generate
   case "gen_vacuum_esp":
     cmd = "python\ncmd.util.protein_vacuum_esp('\(n)', mode=2, quiet=0, _self=cmd)\npython end"
-  case "gen_symm_4": cmd = "symexp \(n)_, \(n), \(n), cutoff=4, segi=1"
-  case "gen_symm_8": cmd = "symexp \(n)_, \(n), \(n), cutoff=8, segi=1"
-  case "gen_symm_20": cmd = "symexp \(n)_, \(n), \(n), cutoff=20, segi=1"
+  case let k where k.hasPrefix("gen_symm_"):
+    cmd = "symexp \(n)_, \(n), \(n), cutoff=\(k.dropFirst(9)), segi=1"
   case "gen_split_chains": cmd = "split_chains \(n)"
   case "map_mesh_sele": cmd = "isomesh \(n)_mesh, \(n), 1.0, sele, carve=2"
   case let k where k.hasPrefix("map_mesh_"):
@@ -1469,7 +763,7 @@ private let allActionMenuItems: [ActionMenuItem] = [
 
 // The classic chrome's neutrals, blended from the panel grey toward the panel
 // text so they stay opaque.
-private enum PanelTheme {
+enum PanelTheme {
   private static let bg = ClassicUI.chromeBg, fg = ClassicUI.chromeText
   static let rowAltBackground = bg.blended(with: fg, 0.03).color
   static let textColor = fg.color
@@ -1761,7 +1055,7 @@ struct ObjectPanel: View {
 // MARK: - Selection mode cycling
 
 /// The "what does a click select" modes (atoms / residues / chains / …), in the
-/// order Tab / Shift+Tab cycles them (#319, installSelectionModeKeyMonitor in
+/// order Tab / Shift+Tab cycles them (#319, installKeyMonitor in
 /// ContentView).
 enum SelectionModeMenu {
   static let modes: [(Int, String)] = [
@@ -1792,38 +1086,18 @@ enum SelectionModeMenu {
 
 // MARK: - Object Row
 
+/// A selection row.
 private struct ObjectRowView: View {
   let entry: ObjectEntry
   @EnvironmentObject var engine: PyMOLEngine
 
   var body: some View {
-    HStack(spacing: 0) {
-      // Desktop PyMOL brackets selection names, without an atom count:
-      // "(sele)", not "(sele (180))".
-      ClassicNameCell(
-        text: entry.isSelection ? "(\(entry.name))" : entry.displayName,
-        enabled: entry.isEnabled, toggle: toggleEnabled)
-
-      // Action buttons: A S H L C
-      ActionMenuButton(name: entry.name, isSelection: entry.isSelection, isGroup: entry.isGroup)
-      ShowButton(name: entry.name)
-      HideButton(name: entry.name)
-      LabelMenuButton(name: entry.name)
-      ColorMenuButton(name: entry.name)
-    }
-    .objectRowChrome()
-    .contentShape(Rectangle())
-    .onTapGesture { toggleEnabled() }
-    // Right-click opens the action menu.
-    .classicContextMenu {
-      classicActionItems(
-        actionMenuItems(isSelection: entry.isSelection, isMap: entry.isMap), name: entry.name,
-        engine: engine)
-    }
-  }
-
-  private func toggleEnabled() {
-    engine.setObjectEnabled(entry.name, !entry.isEnabled)
+    HStack(spacing: 0) { ObjectRowContent(entry: entry) }
+      .objectRowChrome()
+      .contentShape(Rectangle())
+      .onTapGesture { engine.setObjectEnabled(entry.name, !entry.isEnabled) }
+      // Right-click opens the action menu.
+      .classicContextMenu { classicActionItems(for: entry, engine: engine) }
   }
 }
 
@@ -1849,9 +1123,9 @@ private struct AllControlsRow: View {
       } items: {
         classicActionItems(allActionMenuItems, name: "all", engine: engine)
       }
-      ShowButton(name: "all")
-      HideButton(name: "all")
-      LabelMenuButton(name: "all")
+      RepMenuButton(kind: .show, name: "all")
+      RepMenuButton(kind: .hide, name: "all")
+      RepMenuButton(kind: .label, name: "all")
       ColorMenuButton(name: "all")
     }
     .objectRowChrome()
@@ -1895,65 +1169,39 @@ private func runAlignCommand(mobile: String, target: String, engine: PyMOLEngine
 }
 
 private struct ActionMenuButton: View {
-  let name: String
-  var isSelection: Bool = false
-  var isGroup: Bool = false
+  let entry: ObjectEntry
   @EnvironmentObject var engine: PyMOLEngine
 
   var body: some View {
     ClassicMenuTrigger {
       ASHLCFace(letter: "A")
     } items: {
-      classicActionItems(
-        actionMenuItems(
-          isSelection: isSelection, isGroup: isGroup,
-          isMap: engine.objects.first { $0.name == name }?.isMap ?? false), name: name,
-        engine: engine)
+      classicActionItems(for: entry, engine: engine)
     }
   }
 }
 
-// MARK: - Show (S) Menu Button
+// MARK: - Show (S) / Hide (H) / Label (L) Menu Buttons
 
-private struct ShowButton: View {
+private struct RepMenuButton: View {
+  enum Kind: String {
+    case show = "S"
+    case hide = "H"
+    case label = "L"
+  }
+  let kind: Kind
   let name: String
   @EnvironmentObject var engine: PyMOLEngine
 
   var body: some View {
     ClassicMenuTrigger {
-      ASHLCFace(letter: "S")
+      ASHLCFace(letter: kind.rawValue)
     } items: {
-      classicItems
-    }
-  }
-}
-
-// MARK: - Hide (H) Menu Button
-
-private struct HideButton: View {
-  let name: String
-  @EnvironmentObject var engine: PyMOLEngine
-
-  var body: some View {
-    ClassicMenuTrigger {
-      ASHLCFace(letter: "H")
-    } items: {
-      classicItems
-    }
-  }
-}
-
-// MARK: - Label (L) Menu Button
-
-private struct LabelMenuButton: View {
-  let name: String
-  @EnvironmentObject var engine: PyMOLEngine
-
-  var body: some View {
-    ClassicMenuTrigger {
-      ASHLCFace(letter: "L")
-    } items: {
-      classicItems
+      switch kind {
+      case .show: showItems
+      case .hide: hideItems
+      case .label: labelItems
+      }
     }
   }
 }
@@ -2011,22 +1259,11 @@ private struct ColorMenuButton: View {
   }
 
   private func applyColor(command: String) {
-    if command.hasPrefix("util.") {
-      let funcName = String(command.dropFirst(5))
-      engine.runCommand("python\ncmd.util.\(funcName)('\(name)')\npython end", naming: name)
-    } else if command == "spectrum" {
-      engine.runCommand("spectrum count, selection=\(name)", naming: name)
-    } else if command == "by_file" {
+    if command == "by_file" {
       engine.loadHeatmapCSV(for: name)
-    } else if command == "rainbow" {
-      // menu.py's rainbow: one colour per residue, N → C.
-      engine.runCommand("spectrum count, rainbow, \(name), byres=1", naming: name)
-    } else if command == "spectrum_b" {
-      // Color by B-factor: blue (low) → white → red (high), the classic
-      // temperature look. Falls back gracefully if b is uniform/zero.
-      engine.runCommand("spectrum b, blue_white_red, \(name)", naming: name)
     } else {
-      engine.runCommand("color \(command), \(name)", naming: name)
+      engine.runCommand(
+        colorSchemeCommand(command, sele: name) ?? "color \(command), \(name)", naming: name)
     }
   }
 
@@ -2037,6 +1274,29 @@ private struct ColorMenuButton: View {
 }
 
 // MARK: - Inspector: color helpers
+
+/// The label column of an inspector row.
+private func inspectorLabel(_ text: String) -> some View {
+  Text(text)
+    .font(.system(size: 10))
+    .foregroundColor(PanelTheme.textColor)
+    .frame(width: 78, alignment: .leading)
+}
+
+/// The command applying a C-menu coloring scheme (util.cnc, spectrum, …) to
+/// `sele`, or nil when `scheme` is a plain color name.
+private func colorSchemeCommand(_ scheme: String, sele: String) -> String? {
+  switch scheme {
+  case "spectrum": return "spectrum count, selection=\(sele)"
+  // menu.py's rainbow: one colour per residue, N → C.
+  case "rainbow": return "spectrum count, rainbow, \(sele), byres=1"
+  // Color by B-factor: blue (low) → white → red (high), the classic
+  // temperature look. Falls back gracefully if b is uniform/zero.
+  case "spectrum_b": return "spectrum b, blue_white_red, \(sele)"
+  case let s where s.hasPrefix("util."): return "python\ncmd.\(s)('\(sele)')\npython end"
+  default: return nil
+  }
+}
 
 private func colorFromHex(_ hex: String) -> Color? {
   var s = hex
@@ -2085,10 +1345,6 @@ private func rgba01(_ color: Color) -> (r: Double, g: Double, b: Double, a: Doub
 private func rgb01List(_ color: Color) -> String {
   let c = rgba01(color)
   return String(format: "[%.3f,%.3f,%.3f]", c.r, c.g, c.b)
-}
-
-private func sanitizeName(_ s: String) -> String {
-  String(s.map { $0.isLetter || $0.isNumber ? $0 : "_" })
 }
 
 private let inspectorNamedColors: [(name: String, color: Color)] = [
@@ -2265,17 +1521,10 @@ private struct RepColorControl: View {
   // scheme is visible on it (PyMOL has no true per-rep scheme coloring).
   private func applyScheme(_ s: String) {
     setOverride("\(defaultColor)")
-    switch s {
-    case "spectrum":
-      engine.runCommand("spectrum count, selection=\(objName)", naming: objName)
-    case "spectrum_b":
-      engine.runCommand("spectrum b, blue_white_red, \(objName)", naming: objName)
-    default:  // util.cnc / util.cbc / util.cbss
-      engine.runCommand("python\ncmd.\(s)('\(objName)')\npython end", naming: objName)
-    }
+    if let c = colorSchemeCommand(s, sele: objName) { engine.runCommand(c, naming: objName) }
   }
   private func applyCustom(_ color: Color) {
-    let nm = "tmp_\(sanitizeName(objName))_\(rep)"
+    let nm = "tmp_\(sanitizedName(objName))_\(rep)"
     engine.runCommand(
       "set_color \(nm), \(rgb01List(color))\nset \(colorSetting), \(nm), \(objName)",
       naming: objName)
@@ -2311,7 +1560,7 @@ private struct SettingColorControl: View {
     engine.runCommand("set \(setting), \(c), \(objName)", naming: objName)
   }
   private func applyCustom(_ color: Color) {
-    let nm = "tmp_\(sanitizeName(objName))_\(rep)_ctr"
+    let nm = "tmp_\(sanitizedName(objName))_\(rep)_ctr"
     engine.runCommand(
       "set_color \(nm), \(rgb01List(color))\nset \(setting), \(nm), \(objName)", naming: objName)
   }
@@ -2327,15 +1576,18 @@ private struct ObjectRowContent: View {
   @EnvironmentObject var engine: PyMOLEngine
 
   var body: some View {
+    // Desktop PyMOL brackets selection names, without an atom count:
+    // "(sele)", not "(sele (180))".
     ClassicNameCell(
-      text: entry.displayName,
+      text: entry.isSelection ? "(\(entry.name))" : entry.displayName,
       enabled: (check ?? (entry.isEnabled ? .on : .off)) != .off,
       bold: entry.isGroup, toggle: toggleEnabled)
 
-    ActionMenuButton(name: entry.name, isSelection: entry.isSelection)
-    ShowButton(name: entry.name)
-    HideButton(name: entry.name)
-    LabelMenuButton(name: entry.name)
+    // Action buttons: A S H L C
+    ActionMenuButton(entry: entry)
+    RepMenuButton(kind: .show, name: entry.name)
+    RepMenuButton(kind: .hide, name: entry.name)
+    RepMenuButton(kind: .label, name: entry.name)
     ColorMenuButton(name: entry.name)
   }
 
@@ -2447,12 +1699,7 @@ private struct ObjectCard: View {
         engine.setObjectEnabled(entry.name, !entry.isEnabled)
       }
       // Right-click opens the action menu.
-      .classicContextMenu {
-        classicActionItems(
-          actionMenuItems(
-            isSelection: entry.isSelection, isGroup: entry.isGroup, isMap: entry.isMap),
-          name: entry.name, engine: engine)
-      }
+      .classicContextMenu { classicActionItems(for: entry, engine: engine) }
 
       if expanded {
         VStack(spacing: 3) {
@@ -2530,9 +1777,7 @@ private struct ObjectCard: View {
     let cur = min(max(scrubState ?? meta?.state ?? 1, 1), total)
     VStack(spacing: 3) {
       HStack(spacing: 6) {
-        Text("State")
-          .font(.system(size: 10)).foregroundColor(PanelTheme.textColor)
-          .frame(width: 78, alignment: .leading)
+        inspectorLabel("State")
         Button {
           scrubState = nil
           setState(max(cur - 1, 1))
@@ -2569,9 +1814,7 @@ private struct ObjectCard: View {
       // navigated by name while scrubbing states (issue #203).
       if let name = meta?.title(forState: cur) {
         HStack(spacing: 6) {
-          Text("Name")
-            .font(.system(size: 10)).foregroundColor(PanelTheme.textColor)
-            .frame(width: 78, alignment: .leading)
+          inspectorLabel("Name")
           Text(name)
             .font(.system(size: 10, weight: .medium))
             .foregroundColor(TimelineTheme.accent)
@@ -2584,9 +1827,7 @@ private struct ObjectCard: View {
       // Play/pause + per-object fps — animates THIS object's models (via a
       // Swift timer + `set state`), independent of the movie and other objects.
       HStack(spacing: 6) {
-        Text("Play")
-          .font(.system(size: 10)).foregroundColor(PanelTheme.textColor)
-          .frame(width: 78, alignment: .leading)
+        inspectorLabel("Play")
         Button {
           engine.toggleObjectStates(entry.name)
         } label: {
@@ -2623,9 +1864,7 @@ private struct ObjectCard: View {
         .help("Playback speed for this object")
       }
       HStack(spacing: 6) {
-        Text("Overlay all")
-          .font(.system(size: 10)).foregroundColor(PanelTheme.textColor)
-          .frame(width: 78, alignment: .leading)
+        inspectorLabel("Overlay all")
         ToggleSetting(value: (meta?.overlayAll ?? false) ? 1 : 0) { on in
           engine.runCommand("set all_states, \(on ? 1 : 0), \(entry.name)", naming: entry.name)
         }
@@ -2668,10 +1907,7 @@ private struct ObjectCard: View {
   private func layerHeader(_ rep: String) -> some View {
     let shown = activeSet.contains(rep)
     HStack(spacing: 6) {
-      Text("Visible")
-        .font(.system(size: 10))
-        .foregroundColor(PanelTheme.textColor)
-        .frame(width: 78, alignment: .leading)
+      inspectorLabel("Visible")
       ToggleSetting(value: shown ? 1 : 0) { on in
         if on {
           engine.runCommand("show \(rep), \(entry.name)", naming: entry.name)
@@ -2867,10 +2103,7 @@ private struct RepPropertyGrid: View {
     -> some View
   {
     HStack(spacing: 6) {
-      Text(label)
-        .font(.system(size: 10))
-        .foregroundColor(PanelTheme.textColor)
-        .frame(width: 78, alignment: .leading)
+      inspectorLabel(label)
       content()
       Spacer(minLength: 0)
     }
@@ -3140,311 +2373,6 @@ struct SceneParamRow: View {
   }
 }
 
-// MARK: - Selection builder (named selections + spatial algebra)
-
-struct SelectionBuilderSheet: View {
-  @EnvironmentObject var engine: PyMOLEngine
-  @Environment(\.dismiss) private var dismiss
-
-  enum Op: String, CaseIterable, Identifiable {
-    case none = "base only"
-    case within = "within … of"
-    case around = "around"
-    case
-      expand = "expand"
-    case extend = "extend (bonds)"
-    case and = "and"
-    case or = "or"
-    case not = "not"
-    var id: String { rawValue }
-    var needsDist: Bool { self == .within || self == .around || self == .expand }
-    var needsCount: Bool { self == .extend }
-    var needsOther: Bool { self == .within || self == .and || self == .or }
-  }
-
-  @State private var base = "sele"
-  @State private var op: Op = .around
-  @State private var dist = "5"
-  @State private var other = "all"
-  @State private var byres = true
-  @State private var name = "sel01"
-  @State private var previewWork: DispatchWorkItem?
-
-  @State private var showRename = false
-  @State private var renameTarget = ""
-  @State private var renameText = ""
-
-  private var bases: [String] {
-    ["sele", "all", "polymer", "organic", "solvent"] + engine.objects.map { $0.name }
-  }
-  private var selections: [ObjectEntry] { engine.objects.filter { $0.isSelection } }
-
-  var body: some View {
-    VStack(spacing: 0) {
-      HStack {
-        Text("Selections").font(.headline)
-        Spacer()
-        Button("Done") { dismiss() }
-      }.padding(16)
-
-      ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
-          builder
-          Divider()
-          manage
-        }.padding(16)
-      }
-    }
-    .onChange(of: expr) { _ in schedulePreview() }
-    .onAppear { schedulePreview() }
-    .onDisappear { engine.selectionPreviewCount = nil }
-    .alert("Rename “\(renameTarget)”", isPresented: $showRename) {
-      TextField("New name", text: $renameText)
-      Button("Rename") { engine.renameObject(renameTarget, to: renameText) }
-      Button("Cancel", role: .cancel) {}
-    }
-    .frame(width: 440, height: 540)
-  }
-
-  // MARK: builder
-
-  private var expr: String {
-    let b = "(\(base))"
-    var e: String
-    switch op {
-    case .none: e = b
-    case .within: e = "\(b) within \(distNum) of (\(other))"
-    case .around: e = "\(b) around \(distNum)"
-    case .expand: e = "\(b) expand \(distNum)"
-    case .extend: e = "\(b) extend \(Int(distNum.rounded()))"
-    case .and: e = "\(b) and (\(other))"
-    case .or: e = "\(b) or (\(other))"
-    case .not: e = "not \(b)"
-    }
-    if byres { e = "byres (\(e))" }
-    return e
-  }
-  private var distNum: Double { Double(dist) ?? 5 }
-
-  private var builder: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("New selection").font(.system(size: 13, weight: .semibold))
-      row("From") { picker($base, bases) }
-      row("Operator") {
-        Picker("", selection: $op) { ForEach(Op.allCases) { Text($0.rawValue).tag($0) } }
-          .labelsHidden()
-      }
-      if op.needsDist || op.needsCount {
-        row(op.needsCount ? "Bonds" : "Distance (Å)") {
-          TextField("5", text: $dist)
-            .frame(width: 70).textFieldStyle(.roundedBorder)
-        }
-      }
-      if op.needsOther {
-        row("Of") { picker($other, bases) }
-      }
-      Toggle("Whole residues (byres)", isOn: $byres).tint(TimelineTheme.accent)
-
-      // Live preview of the composed expression + match count.
-      VStack(alignment: .leading, spacing: 4) {
-        Text(expr).font(.system(size: 11, design: .monospaced))
-          .foregroundStyle(.secondary).textSelection(.enabled)
-        Text(previewText).font(.caption).foregroundStyle(.secondary)
-      }
-      HStack {
-        TextField("name", text: $name).frame(width: 120).textFieldStyle(.roundedBorder)
-        Spacer()
-        Button {
-          engine.createSelection(name: name, expr: expr)
-          dismiss()
-        } label: {
-          Label("Create", systemImage: "plus").font(.system(size: 13, weight: .semibold))
-        }
-        .buttonStyle(.borderedProminent).tint(TimelineTheme.accent)
-        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-      }
-    }
-  }
-
-  private var previewText: String {
-    if let c = engine.selectionPreviewCount { return "\(c) atom\(c == 1 ? "" : "s")" }
-    return "…"
-  }
-
-  private func schedulePreview() {
-    previewWork?.cancel()
-    let e = expr
-    let work = DispatchWorkItem { engine.previewSelection(e) }
-    previewWork = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
-  }
-
-  // MARK: manage existing selections
-
-  private var manage: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("Manage").font(.system(size: 13, weight: .semibold))
-      if selections.isEmpty {
-        Text("No named selections yet.").font(.caption).foregroundStyle(.secondary)
-      } else {
-        ForEach(selections) { sel in
-          HStack(spacing: 10) {
-            Toggle(
-              "",
-              isOn: Binding(
-                get: { sel.isEnabled },
-                set: { on in
-                  engine.runCommand("\(on ? "enable" : "disable") \(sel.name)", naming: sel.name)
-                })
-            )
-            .labelsHidden()
-            Text(sel.name).font(.system(size: 13))
-            if let c = sel.atomCount { Text("(\(c))").font(.caption).foregroundStyle(.secondary) }
-            Spacer()
-            Button {
-              renameTarget = sel.name
-              renameText = sel.name
-              showRename = true
-            } label: {
-              Image(systemName: "pencil")
-            }.buttonStyle(.borderless)
-            Button(role: .destructive) {
-              engine.runCommand("delete \(sel.name)", naming: sel.name)
-            } label: {
-              Image(systemName: "trash")
-            }.buttonStyle(.borderless)
-          }
-        }
-      }
-    }
-  }
-
-  // MARK: helpers
-
-  @ViewBuilder
-  private func row<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
-    HStack {
-      Text(label).font(.system(size: 12)).frame(width: 90, alignment: .leading)
-      content()
-      Spacer()
-    }
-  }
-
-  private func picker(_ sel: Binding<String>, _ opts: [String]) -> some View {
-    ClassicPicker(selection: sel, options: opts.map { ($0, $0) })
-  }
-}
-
-// MARK: - Searchable Settings panel (all ~825 PyMOL settings)
-
-struct SettingsSheet: View {
-  @EnvironmentObject var engine: PyMOLEngine
-  @Environment(\.dismiss) private var dismiss
-  @State private var search = ""
-  private var filtered: [SettingItem] {
-    let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-    if q.isEmpty { return engine.settingsCatalog }
-    return engine.settingsCatalog.filter { $0.name.contains(q) }
-  }
-
-  var body: some View {
-    VStack(spacing: 0) {
-      HStack {
-        Text("Settings").font(.headline)
-        Spacer()
-        Button("Done") { dismiss() }
-      }.padding(16)
-
-      HStack {
-        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-        TextField("Search \(engine.settingsCatalog.count) settings…", text: $search)
-          .textFieldStyle(.plain)
-          .autocorrectionDisabled()
-        if !search.isEmpty {
-          Button {
-            search = ""
-          } label: {
-            Image(systemName: "xmark.circle.fill")
-          }
-          .buttonStyle(.plain).foregroundStyle(.secondary)
-        }
-      }
-      .padding(8).background(Color.gray.opacity(0.15))
-      .clipShape(RoundedRectangle(cornerRadius: 8))
-      .padding(.horizontal, 16)
-
-      if engine.settingsCatalog.isEmpty {
-        Spacer()
-        ProgressView("Loading settings…")
-        Spacer()
-      } else {
-        List(filtered) { item in
-          SettingRow(item: item)
-        }
-        .listStyle(.plain)
-      }
-    }
-    .onAppear {
-      if engine.settingsCatalog.isEmpty { engine.loadSettingsCatalog() }
-    }
-    .frame(width: 460, height: 560)
-  }
-
-}
-
-private struct SettingRow: View {
-  let item: SettingItem
-  @EnvironmentObject var engine: PyMOLEngine
-  @State private var text = ""
-
-  private var isBool: Bool { item.type == 1 }
-  private var boolOn: Bool {
-    if let d = Double(item.val) { return d != 0 }
-    return ["on", "true", "yes"].contains(item.val.lowercased())
-  }
-
-  var body: some View {
-    HStack(spacing: 8) {
-      Text(item.name)
-        .font(.system(size: 12, design: .monospaced))
-        .lineLimit(1).minimumScaleFactor(0.7)
-      Spacer(minLength: 8)
-      if isBool {
-        Toggle(
-          "",
-          isOn: Binding(
-            get: { boolOn },
-            set: { engine.setSetting(item.name, $0 ? "1" : "0") })
-        )
-        .labelsHidden().tint(TimelineTheme.accent)
-      } else {
-        TextField("", text: $text)
-          .multilineTextAlignment(.trailing)
-          .classicField()
-          .frame(width: 110)
-          .autocorrectionDisabled()
-          .onSubmit { engine.setSetting(item.name, text) }
-          .onAppear { text = item.val }
-          .onChange(of: item.val) { text = $0 }
-      }
-    }
-    .font(.system(size: 12))
-  }
-}
-
-// MARK: - ObjectEntry extension for MoleculeObject bridging
-
-extension ObjectEntry {
-  /// Create from the engine's MoleculeObject model
-  init(from mol: MoleculeObject) {
-    self.id = mol.id
-    self.name = mol.name
-    self.isEnabled = mol.isEnabled
-    self.isSelection = false
-    self.atomCount = nil
-  }
-}
-
 // MARK: - Object panel JSON payload
 
 /// Decoded shape of the tempfile written by `appkit_inspector.poll_panel`.
@@ -3457,7 +2385,6 @@ struct PanelPayload: Decodable {
   let enabled: [String]
   let sel_counts: [String: Int]
   let nstate: [String: Int]?
-  let has_transp: [String: Bool]?
   // Group tree (#255). OPTIONAL on purpose: a non-optional field makes
   // the whole decode fail against an older bundled mmol/inspector.py,
   // which would freeze the panel on its last list rather than degrade
@@ -3506,7 +2433,6 @@ extension PyMOLEngine {
           isSelection: false,
           atomCount: nil,
           stateCount: max(payload.nstate?[name] ?? 1, 1),
-          hasAtomTransp: payload.has_transp?[name] ?? false,
           isGroup: groupSet.contains(name),
           parent: parentMap[name],
           isMap: mapSet.contains(name)
@@ -3550,15 +2476,18 @@ extension PyMOLEngine {
   }
 }
 
-// MoleculeObject is now a typealias for ObjectEntry — no conversion needed.
-
-// MARK: - Updated ObjectPanel using engine.objects directly
-
 // MARK: - A/S/H/L menus
 
 // The A/S/H/L/C buttons open the opaque, square desktop-PyMOL menus
 // (ClassicMenu.swift). The A button and an object row's right-click open the
 // same A menu.
+
+/// The A menu for `entry`'s kind of row (object, selection, group, map).
+private func classicActionItems(for entry: ObjectEntry, engine: PyMOLEngine) -> [ClassicMenuItem] {
+  classicActionItems(
+    actionMenuItems(isSelection: entry.isSelection, isGroup: entry.isGroup, isMap: entry.isMap),
+    name: entry.name, engine: engine)
+}
 
 /// The A menu (`actionMenuItems`) as classic menu items.
 private func classicActionItems(
@@ -3628,8 +2557,8 @@ private func classicActionItems(
   }
 }
 
-extension ShowButton {
-  fileprivate var classicItems: [ClassicMenuItem] {
+extension RepMenuButton {
+  fileprivate var showItems: [ClassicMenuItem] {
     let n = name
     var items: [ClassicMenuItem] = [
       .submenu(
@@ -3662,10 +2591,8 @@ extension ShowButton {
     }
     return items
   }
-}
 
-extension HideButton {
-  fileprivate var classicItems: [ClassicMenuItem] {
+  fileprivate var hideItems: [ClassicMenuItem] {
     let n = name
     var items: [ClassicMenuItem] = [
       .action("side chains") {
@@ -3693,10 +2620,8 @@ extension HideButton {
     }
     return items
   }
-}
 
-extension LabelMenuButton {
-  fileprivate var classicItems: [ClassicMenuItem] {
+  fileprivate var labelItems: [ClassicMenuItem] {
     let n = name
     return labelOptions.compactMap { opt -> ClassicMenuItem? in
       if opt.label == "---" { return .separator }
@@ -3705,181 +2630,5 @@ extension LabelMenuButton {
         engine.runCommand(expr.isEmpty ? "label \(n)" : "label \(n), \(expr)", naming: n)
       }
     }
-  }
-}
-
-// MARK: - Heatmap panel (C ▸ by file…)
-
-/// The chip value that selects an object's heatmap panel rather than a layer.
-let kHeatmapChip = "__heatmap"
-
-/// Edits one object's CSV heatmap: colours, value range, value column and
-/// index column. Every change recolours the object (Heatmap.swift).
-private struct HeatmapPanel: View {
-  let objName: String
-  @EnvironmentObject var engine: PyMOLEngine
-  // The range thumbs move freely while dragging and recolour on release.
-  @State private var liveRange: ClosedRange<Double>?
-
-  var body: some View {
-    if let st = engine.heatmaps[objName] {
-      VStack(alignment: .leading, spacing: 6) {
-        HStack {
-          Text(st.csv.fileName).font(.system(size: 10, weight: .semibold))
-            .foregroundColor(PanelTheme.textColor).lineLimit(1).truncationMode(.middle)
-          Spacer()
-          Text("\(st.residueValues.count) residues")
-            .font(.system(size: 9)).foregroundColor(PanelTheme.disabledColor)
-        }
-        row("Low color") {
-          DebouncedColorPicker(
-            get: { st.settings.low.color },
-            apply: { c in engine.updateHeatmap(objName) { $0.low = c.rgba } })
-        }
-        row("High color") {
-          DebouncedColorPicker(
-            get: { st.settings.high.color },
-            apply: { c in engine.updateHeatmap(objName) { $0.high = c.rgba } })
-        }
-        row("White midpoint") {
-          Toggle(
-            "",
-            isOn: Binding(
-              get: { st.settings.throughWhite },
-              set: { v in engine.updateHeatmap(objName) { $0.throughWhite = v } })
-          )
-          .toggleStyle(ClassicSwitchStyle()).labelsHidden()
-        }
-        gradient(st)
-        let shown = liveRange ?? (st.settings.minValue...st.settings.maxValue)
-        HStack {
-          Text("min \(fmt(shown.lowerBound))")
-          Spacer()
-          Text("max \(fmt(shown.upperBound))")
-        }
-        .font(.system(size: 9, design: .monospaced)).foregroundColor(PanelTheme.textColor)
-        HeatmapRangeSlider(
-          bounds: st.dataRange, value: shown,
-          onChange: { liveRange = $0 },
-          onEnd: { r in
-            liveRange = nil
-            engine.updateHeatmap(objName) {
-              $0.minValue = r.lowerBound
-              $0.maxValue = r.upperBound
-            }
-          }
-        )
-        .frame(height: 18)
-        row("Heatmap column") {
-          Picker(
-            "",
-            selection: Binding(
-              get: { st.settings.column },
-              set: { v in engine.updateHeatmap(objName) { $0.column = v } })
-          ) {
-            ForEach(st.csv.numericColumns.filter { $0 != st.settings.indexColumn }, id: \.self) {
-              Text($0).tag($0)
-            }
-          }
-          .labelsHidden().controlSize(.small).frame(maxWidth: 150)
-        }
-        row("Index column") {
-          Picker(
-            "",
-            selection: Binding(
-              get: { st.settings.indexColumn ?? "" },
-              set: { v in engine.updateHeatmap(objName) { $0.indexColumn = v.isEmpty ? nil : v } })
-          ) {
-            Text("None (row 1 = residue 1)").tag("")
-            ForEach(st.csv.headers, id: \.self) { Text($0).tag($0) }
-          }
-          .labelsHidden().controlSize(.small).frame(maxWidth: 150)
-        }
-        HStack {
-          Button("Reapply") { engine.applyHeatmap(objName) }
-            .help("Recolour from the heatmap again (after colouring the object some other way)")
-          Spacer()
-          Button("Remove") {
-            engine.heatmaps[objName] = nil
-          }
-          .help("Forget this CSV (the colours stay until you recolour)")
-        }
-        .controlSize(.small)
-      }
-      .padding(.vertical, 4)
-    }
-  }
-
-  private func row<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
-    HStack {
-      Text(label).font(.system(size: 10)).foregroundColor(PanelTheme.textColor)
-      Spacer()
-      content()
-    }
-  }
-
-  /// The colour scale itself, low → high.
-  private func gradient(_ st: HeatmapState) -> some View {
-    let lo = st.settings.minValue
-    let hi = st.settings.maxValue
-    let stops = (0...8).map { k -> Color in st.color(for: lo + (hi - lo) * Double(k) / 8).color }
-    return LinearGradient(colors: stops, startPoint: .leading, endPoint: .trailing)
-      .frame(height: 8)
-      .clipShape(RoundedRectangle(cornerRadius: 2))
-  }
-
-  private func fmt(_ v: Double) -> String {
-    abs(v) >= 1000 || (abs(v) < 0.01 && v != 0)
-      ? String(format: "%.3g", v) : String(format: "%.2f", v)
-  }
-}
-
-/// One track, two thumbs: the colour scale's min and max within the data range.
-private struct HeatmapRangeSlider: View {
-  let bounds: ClosedRange<Double>
-  let value: ClosedRange<Double>
-  let onChange: (ClosedRange<Double>) -> Void
-  let onEnd: (ClosedRange<Double>) -> Void
-  @State private var dragging: ClosedRange<Double>?
-
-  var body: some View {
-    GeometryReader { geo in
-      let w = max(1, geo.size.width - 14)
-      let span = max(1e-12, bounds.upperBound - bounds.lowerBound)
-      let cur = dragging ?? value
-      let x = { (v: Double) in 7 + CGFloat((v - bounds.lowerBound) / span) * w }
-      let v = { (px: CGFloat) in bounds.lowerBound + Double(min(max(0, (px - 7) / w), 1)) * span }
-      ZStack(alignment: .leading) {
-        Capsule().fill(PanelTheme.buttonBackground).frame(height: 4)
-        Capsule().fill(PanelTheme.accentColor)
-          .frame(width: max(0, x(cur.upperBound) - x(cur.lowerBound)), height: 4)
-          .offset(x: x(cur.lowerBound))
-        thumb.position(x: x(cur.lowerBound), y: geo.size.height / 2)
-          .gesture(
-            DragGesture().onChanged { g in
-              let lo = min(v(g.location.x), cur.upperBound)
-              dragging = lo...cur.upperBound
-              onChange(dragging!)
-            }.onEnded { _ in
-              if let d = dragging { onEnd(d) }
-              dragging = nil
-            })
-        thumb.position(x: x(cur.upperBound), y: geo.size.height / 2)
-          .gesture(
-            DragGesture().onChanged { g in
-              let hi = max(v(g.location.x), cur.lowerBound)
-              dragging = cur.lowerBound...hi
-              onChange(dragging!)
-            }.onEnded { _ in
-              if let d = dragging { onEnd(d) }
-              dragging = nil
-            })
-      }
-    }
-  }
-
-  private var thumb: some View {
-    Circle().fill(Color.white).frame(width: 13, height: 13)
-      .shadow(color: .black.opacity(0.3), radius: 1, y: 0.5)
   }
 }

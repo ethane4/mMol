@@ -27,6 +27,4 @@ bool SceneRay(PyMOLGlobals* G, int ray_width, int ray_height, int mode,
               float shift, int quiet, G3dPrimitive** g3d, int show_timing,
               int antialias);
 
-void SceneRenderRayVolume(PyMOLGlobals* G, CScene* I);
-
 #endif

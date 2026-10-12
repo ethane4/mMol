@@ -117,7 +117,6 @@ enum cLoadType_t : int {
   /* 68 is Python-based MAE  */
   cLoadTypeVDBStr = 69,
 
-
   // Distinguish CCP4-like map types:
   // - cLoadTypeCCP4Str/cLoadTypeCCP4Map : CCP4 format, ignore MRC features
   // - cLoadTypeCCP4Unspecified          : CCP4 or MRC format (auto-detect)
@@ -370,13 +369,6 @@ pymol::Result<> ExecutiveDeleteStates(PyMOLGlobals* G, std::string_view name,
 
 void ExecutivePurgeSpec(PyMOLGlobals* G, SpecRec* rec, bool save = false);
 
-/**
- * @brief Readds specs to Executive
- * @param G pointer to global pymol singletons
- * @param specs list of specs to be readded
- */
-
-void ExecutiveReAddSpec(PyMOLGlobals* G, std::vector<DiscardedRec>& specs);
 void ExecutiveDump(PyMOLGlobals* G, const char* fname, const char* obj,
                    int state, int quiet);
 pymol::Result<> ExecutiveSort(PyMOLGlobals* G, const char* name);
@@ -577,8 +569,6 @@ void ExecutiveGetSelectionCoords(PyMOLGlobals* G, std::vector<float>& coords);
  */
 void ExecutiveGetNamedSelectionCoords(PyMOLGlobals* G, const char* name,
                                       std::vector<float>& coords);
-void ExecutiveRenderSelections(PyMOLGlobals* G, int curState, int slot,
-                               GridInfo* grid);
 void ExecutiveHideSelections(PyMOLGlobals* G);
 pymol::Result<> ExecutiveSetTitle(PyMOLGlobals* G, const char* name, int state,
                                   const char* text);
@@ -1004,12 +994,6 @@ bool ExecutiveIsObjectType(const SpecRec& rec, int cObjectType);
 std::vector<OrderRec> ExecutiveGetOrderOf(PyMOLGlobals* G,
                                           pymol::zstring_view nameList);
 
-/**
- * Sets recs in the Specification records in list at certain positions
- * @param recs recs to be reordered in list
- */
-
-void ExecutiveSetOrderOf(PyMOLGlobals* G, const std::vector<OrderRec>& recs);
 void ExecutiveInvalidatePanelList(PyMOLGlobals* G);
 void ExecutiveSpecSetVisibility(PyMOLGlobals* G, SpecRec* rec, int new_vis,
                                 int mod, int parents);

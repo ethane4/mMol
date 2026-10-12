@@ -55,7 +55,6 @@ RepEllipsoid::~RepEllipsoid() {
 void RepEllipsoid::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   int ok = true;
 
   PyMOLGlobals* G = I->G;
@@ -83,36 +82,26 @@ void RepEllipsoid::render(RenderInfo* info) {
     }
     CHECKOK(ok, I->std);
   } else if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-      if (I->shaderCGO) {
-        CGORenderPicking(I->shaderCGO, info, &I->context, I->cs->Setting.get(),
-                         I->obj->Setting.get());
-      } else if (I->std) {
-        CGORenderPicking(I->std, info, &I->context, I->cs->Setting.get(),
-                         I->obj->Setting.get());
+    int use_shaders;
+    use_shaders = SettingGetGlobal_b(G, cSetting_use_shaders);
+
+    PRINTFD(G, FB_RepEllipsoid)
+    " RepEllipsoidRender: rendering GL...\n" ENDFD;
+
+    if (use_shaders) {
+      if (!I->shaderCGO) {
+        I->shaderCGO = CGOOptimizeToVBONotIndexed(I->std, 0);
+        assert(I->shaderCGO->use_shader);
       }
     } else {
-      int use_shaders;
-      use_shaders = SettingGetGlobal_b(G, cSetting_use_shaders);
-
-      PRINTFD(G, FB_RepEllipsoid)
-      " RepEllipsoidRender: rendering GL...\n" ENDFD;
-
-      if (use_shaders) {
-        if (!I->shaderCGO) {
-          I->shaderCGO = CGOOptimizeToVBONotIndexed(I->std, 0);
-          assert(I->shaderCGO->use_shader);
-        }
-      } else {
-        CGOFree(I->shaderCGO);
-      }
-      if (I->shaderCGO) {
-        CGORender(I->shaderCGO, nullptr, I->cs->Setting.get(),
-                  I->obj->Setting.get(), info, I);
-      } else if (I->std) {
-        CGORender(I->std, nullptr, I->cs->Setting.get(), I->obj->Setting.get(),
-                  info, I);
-      }
+      CGOFree(I->shaderCGO);
+    }
+    if (I->shaderCGO) {
+      CGORender(I->shaderCGO, nullptr, I->cs->Setting.get(),
+                I->obj->Setting.get(), info, I);
+    } else if (I->std) {
+      CGORender(I->std, nullptr, I->cs->Setting.get(), I->obj->Setting.get(),
+                info, I);
     }
   }
 }

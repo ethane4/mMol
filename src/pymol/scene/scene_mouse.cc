@@ -13,7 +13,6 @@
 #include "pymol/base/pymol_globals.h"
 #include "pymol/objects/pymol_object.h"
 #include "pymol/scene/scene_def.h"
-#include "pymol/scene/scene_picking.h"
 #include "pymol/select/selector.h"
 #include "pymol/ui/seq.h"
 #include "pymol/ui/wizard.h"
@@ -25,13 +24,6 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #define cDoubleTime 0.35
-
-NamedPicking::NamedPicking(const Picking& pick) : src(pick.src) {
-  if (pick.context.object != nullptr) {
-    context.name = pick.context.object->Name;
-  }
-  context.state = pick.context.state;
-}
 
 static void SceneNoteMouseInteraction(PyMOLGlobals* G) {
   SceneAbortAnimation(G);
@@ -83,51 +75,6 @@ static void SceneLoopRelease(Block* block, int button, int x, int y, int mod) {
   I->LoopFlag = false;
   OrthoUngrab(G);
   OrthoDirty(G);
-}
-
-void SceneClickButtonAddTo(PyMOLGlobals* G, pymol::CObject* obj,
-                           pymol::zstring_view selName,
-                           pymol::zstring_view buffer,
-                           pymol::zstring_view sel_mode_kw) {
-  CScene* I = G->Scene;
-  if (SelectorIndexByName(G, selName.c_str()) >= 0) {
-    auto buf2 = pymol::string_format(
-        "(((%s) or %s(%s)) and not ((%s(%s)) and %s(%s)))", selName,
-        sel_mode_kw, buffer, sel_mode_kw, buffer, sel_mode_kw, selName);
-    SelectorCreate(G, selName.c_str(), buf2.c_str(), nullptr, false, nullptr);
-    if (obj->type == cObjectMolecule) {
-      if (SettingGetGlobal_i(G, cSetting_logging)) {
-        auto objMol = (ObjectMolecule*)obj;
-        auto atomSele = ObjectMoleculeGetAtomSeleLog(
-            objMol, I->LastPicked.src.index, false);
-        auto select = pymol::string_format(
-            "(((%s) or %s(%s)) and not ((%s(%s)) and %s(%s)))", selName,
-            sel_mode_kw, atomSele, sel_mode_kw, atomSele, sel_mode_kw, selName);
-        auto pLogBuffer =
-            pymol::string_format("cmd.select('%s',\"%s(%s)\",enable=1)",
-                                 selName, sel_mode_kw, select);
-        PLog(G, pLogBuffer, cPLog_pym);
-      }
-    }
-  } else {
-    auto buf2 = pymol::string_format("%s(%s)", sel_mode_kw, buffer);
-    SelectorCreate(G, selName.c_str(), buf2.c_str(), nullptr, false, nullptr);
-    if (obj->type == cObjectMolecule) {
-      if (SettingGet<int>(G, cSetting_logging)) {
-        auto objMol = (ObjectMolecule*)obj;
-        auto atomSele = ObjectMoleculeGetAtomSeleLog(
-            objMol, I->LastPicked.src.index, false);
-        auto select = pymol::string_format("cmd.select('%s',\"%s(%s)\")",
-                                           selName, sel_mode_kw, atomSele);
-        PLog(G, select, cPLog_pym);
-      }
-    }
-  }
-  if (SettingGet<bool>(G, cSetting_auto_hide_selections))
-    ExecutiveHideSelections(G);
-  if (SettingGet<bool>(G, cSetting_auto_show_selections))
-    ExecutiveSetObjVisib(G, selName, 1, false);
-  WizardDoSelect(G, selName.c_str(), I->LastPicked.context.state);
 }
 
 /**
@@ -215,338 +162,12 @@ static int SceneClickSceneButton(PyMOLGlobals* G, int button, int x, int y,
 }
 
 /**
- * Handles object-related click events
- * @param obj clicked object
- * @param LastPicked last picked info
- * @param mode mouse button mode
- * @param sel_mode_kw Current selection mode operator for the mouse
- *
- */
-void SceneClickObject(PyMOLGlobals* G, pymol::CObject* obj,
-                      const NamedPicking& LastPicked, int mode,
-                      pymol::zstring_view sel_mode_kw) {
-  std::string selName;
-  switch (obj->type) {
-    case cObjectMolecule: {
-      if (Feedback(G, FB_Scene, FB_Results)) {
-        auto buffer = obj->describeElement(LastPicked.src.index);
-        PRINTF " You clicked %s", buffer.c_str() ENDF(G);
-        OrthoRestorePrompt(G);
-      }
-      auto buffer =
-          pymol::string_format("%s`%d", obj->Name, LastPicked.src.index + 1);
-      switch (mode) {  // Populate SelName/buffers
-        case cButModeLB:
-        case cButModeAddToLB:
-          selName = "lb";
-          break;
-        case cButModeMB:
-        case cButModeAddToMB:
-          selName = "mb";
-          break;
-        case cButModeRB:
-        case cButModeAddToRB:
-          selName = "rb";
-          break;
-        case cButModeSeleSet:
-        case cButModeSeleToggle:
-          ExecutiveGetActiveSeleName(G, selName, true,
-                                     SettingGet<int>(G, cSetting_logging));
-          break;
-        case cButModeDragMol: {
-          auto objMol = (ObjectMolecule*)obj;
-          auto atomSele =
-              ObjectMoleculeGetAtomSeleLog(objMol, LastPicked.src.index, false);
-          auto pLogBuffer =
-              pymol::string_format("cmd.drag(\"bymol (%s)\")", atomSele);
-          PParse(G, pLogBuffer);
-          PLog(G, buffer, cPLog_pym);
-        } break;
-        case cButModeDragObj: {
-          auto objMol = (ObjectMolecule*)obj;
-          auto atomSele =
-              ObjectMoleculeGetAtomSeleLog(objMol, LastPicked.src.index, false);
-          auto pLogBuffer =
-              pymol::string_format("cmd.drag(\"byobject (%s)\")", atomSele);
-          PParse(G, pLogBuffer);
-          PLog(G, pLogBuffer, cPLog_pym);
-        } break;
-        case cButModeOrigAt:
-          SceneNoteMouseInteraction(G);
-          {
-            float v1[3];
-
-            if (ObjectMoleculeGetAtomTxfVertex((ObjectMolecule*)obj,
-                                               LastPicked.context.state,
-                                               LastPicked.src.index, v1)) {
-              EditorFavorOrigin(G, v1);
-              ExecutiveOrigin(G, nullptr, true, nullptr, v1, 0);
-            }
-          }
-          if (obj->type == cObjectMolecule) {
-            if (SettingGetGlobal_i(G, cSetting_logging)) {
-              auto objMol = (ObjectMolecule*)obj;
-              auto atomSele = ObjectMoleculeGetAtomSeleLog(
-                  objMol, LastPicked.src.index, false);
-              auto pLogBuffer =
-                  pymol::string_format("cmd.origin(\"%s\")", atomSele);
-              PLog(G, pLogBuffer, cPLog_pym);
-            }
-            if (Feedback(G, FB_Scene, FB_Results)) {
-              auto buffer = obj->describeElement(LastPicked.src.index);
-              PRINTF " You clicked %s", buffer.c_str() ENDF(G);
-              OrthoRestorePrompt(G);
-            }
-          }
-          PRINTFB(G, FB_Scene, FB_Actions)
-          " Scene: Origin set.\n" ENDFB(G);
-          break;
-        case cButModeCent:
-          SceneNoteMouseInteraction(G);
-          {
-            float v1[3];
-
-            if (ObjectMoleculeGetAtomTxfVertex((ObjectMolecule*)obj,
-                                               LastPicked.context.state,
-                                               LastPicked.src.index, v1)) {
-              ExecutiveCenter(G, nullptr, 0, true, -1, v1, true);
-            }
-          }
-
-          if (SettingGet<int>(G, cSetting_logging)) {
-            auto objMol = (ObjectMolecule*)obj;
-            auto atomSele = ObjectMoleculeGetAtomSeleLog(
-                objMol, LastPicked.src.index, false);
-            auto pLogBuffer =
-                pymol::string_format("cmd.center(\"%s\",state=%d)", atomSele,
-                                     LastPicked.context.state + 1);
-            PLog(G, pLogBuffer, cPLog_pym);
-          }
-          break;
-      }
-      switch (mode) {
-        case cButModeSimpleClick:
-          break;
-        case cButModeLB:
-        case cButModeMB:
-        case cButModeRB:
-        case cButModeSeleSet: {
-          auto buf2 = pymol::string_format("(%s(%s))", sel_mode_kw, buffer);
-          SelectorCreate(G, selName.c_str(), buf2.c_str(), nullptr, false,
-                         nullptr);
-        }
-          if (SettingGet<bool>(G, cSetting_auto_hide_selections))
-            ExecutiveHideSelections(G);
-          if (SettingGet<bool>(G, cSetting_auto_show_selections))
-            ExecutiveSetObjVisib(G, selName, 1, false);
-          if (obj->type == cObjectMolecule) {
-            if (SettingGet<int>(G, cSetting_logging)) {
-              auto objMol = (ObjectMolecule*)obj;
-              auto buf1 = ObjectMoleculeGetAtomSeleLog(
-                  objMol, LastPicked.src.index, false);
-              auto pLogBuffer =
-                  pymol::string_format("cmd.select('%s',\"%s(%s)\",enable=1)",
-                                       selName, sel_mode_kw, buf1);
-              PLog(G, pLogBuffer, cPLog_pym);
-            }
-          }
-          WizardDoSelect(G, selName.c_str(), LastPicked.context.state);
-          break;
-        case cButModeAddToLB:
-        case cButModeAddToMB:
-        case cButModeAddToRB:
-        case cButModeSeleToggle:
-          SceneClickButtonAddTo(G, obj, selName, buffer.c_str(), sel_mode_kw);
-          break;
-      }
-    }
-    case cObjectGadget:
-      break;
-    default:
-      EditorInactivate(G);
-      break;
-  }
-}
-
-void SceneClickTransformObject(PyMOLGlobals* G, pymol::CObject* obj,
-                               const NamedPicking& LastPicked, int mode,
-                               bool is_single_click) {
-  auto I = G->Scene;
-  switch (obj->type) {
-    case cObjectMolecule:
-      switch (mode) {
-        case cButModeMenu: {
-          ObjectMolecule* objMol = (ObjectMolecule*)obj;
-          int active_sele = ExecutiveGetActiveSele(G);
-          if (active_sele &&
-              SelectorIsMember(G,
-                               objMol->AtomInfo[LastPicked.src.index].selEntry,
-                               active_sele)) {
-            /* user clicked on a selected atom */
-            ObjectNameType name;
-            ExecutiveGetActiveSeleName(G, name, false,
-                                       SettingGetGlobal_i(G, cSetting_logging));
-            MenuActivate2Arg(G, I->LastWinX,
-                             I->LastWinY + 20, /* selection menu */
-                             I->LastWinX, I->LastWinY, is_single_click,
-                             "pick_sele", name, name);
-          } else {
-            /* user clicked on an atom not in a selection */
-            auto buffer = obj->describeElement(LastPicked.src.index);
-            auto atomSele = ObjectMoleculeGetAtomSeleLog(
-                (ObjectMolecule*)obj, LastPicked.src.index, false);
-            MenuActivate2Arg(G, I->LastWinX, I->LastWinY + 20, I->LastWinX,
-                             I->LastWinY, is_single_click, "pick_menu",
-                             buffer.c_str(), atomSele.c_str());
-          }
-        } break;
-        case cButModePickAtom1:
-          if (obj && obj->type == cObjectMolecule) {
-            if (Feedback(G, FB_Scene, FB_Results)) {
-              auto buffer = obj->describeElement(LastPicked.src.index);
-              PRINTF " You clicked %s -> (%s)\n", buffer.c_str(),
-                  cEditorSele1 ENDF(G);
-            }
-            if (SettingGet<int>(G, cSetting_logging)) {
-              auto objMol = (ObjectMolecule*)obj;
-              auto atomSele = ObjectMoleculeGetAtomSeleLog(
-                  objMol, LastPicked.src.index, false);
-              auto pLogBuffer =
-                  pymol::string_format("cmd.edit(\"%s\",pkresi=1)", atomSele);
-              PLog(G, pLogBuffer, cPLog_pym);
-            }
-            OrthoRestorePrompt(G);
-            auto buffer = pymol::string_format("%s`%d", obj->Name,
-                                               LastPicked.src.index + 1);
-            EditorInactivate(G);
-            SelectorCreate(G, cEditorSele1, buffer.c_str(), nullptr, true,
-                           nullptr);
-            EditorActivate(G, SettingGet<int>(G, cSetting_state) - 1, false);
-            if (EditorActive(G)) {
-              EditorDefineExtraPks(G);
-            }
-            WizardDoPick(G, 0, LastPicked.context.state);
-          }
-          break;
-        case cButModePickAtom:
-          if (obj && obj->type == cObjectMolecule) {
-            auto buffer = obj->describeElement(LastPicked.src.index);
-            if (EditorIsBondMode(G)
-                /* &&!(EditorIsAnActiveObject(G,(ObjectMolecule*)obj)) */
-            ) {
-              EditorInactivate(G);
-              EditorLogState(G, false);
-            }
-            if ((!EditorIsBondMode(G)) &&
-                EditorDeselectIfSelected(G, (ObjectMolecule*)obj,
-                                         LastPicked.src.index, true)) {
-              PRINTF " You unpicked %s.", buffer.c_str() ENDF(G);
-              if (EditorActive(G)) EditorDefineExtraPks(G);
-              EditorLogState(G, false);
-            } else {
-              if (EditorIsBondMode(G) &&
-                  EditorDeselectIfSelected(G, (ObjectMolecule*)obj,
-                                           LastPicked.src.index, false)) {
-                EditorInactivate(G);
-              }
-              WordType name;
-              EditorGetNextMultiatom(G, name);
-
-              PRINTFB(G, FB_Scene, FB_Results)
-              " You clicked %s -> (%s)\n", buffer.c_str(), name ENDFB(G);
-              /* TODO: logging */
-
-              auto buffer = pymol::string_format("%s`%d", obj->Name,
-                                                 LastPicked.src.index + 1);
-              ExecutiveDelete(G, name);
-              SelectorCreate(G, name, buffer.c_str(), nullptr, true, nullptr);
-              EditorActivate(G, SettingGet<int>(G, cSetting_state) - 1, false);
-              if (EditorActive(G)) {
-                EditorDefineExtraPks(G);
-              }
-              EditorLogState(G, false);
-              WizardDoPick(G, 0, LastPicked.context.state);
-            }
-          }
-          break;
-      }
-      break;
-    case cObjectGadget:
-      break;
-    default:
-      EditorInactivate(G);
-      break;
-  }
-}
-
-/**
  * Handle logic for objects with pickable bonds
  * @param x cursor X
  * @param y cursor Y
  * @param mode mouse button mode
  * @param lastPicked last picked info
  */
-
-void SceneClickPickBond(PyMOLGlobals* G, int x, int y, int mode,
-                        const NamedPicking& LastPicked) {
-  auto I = G->Scene;
-  auto obj = ExecutiveFindObject<ObjectMolecule>(G, LastPicked.context.name);
-  EditorInactivate(G);
-  if (!obj) {
-    return;
-  }
-  if (Feedback(G, FB_Scene, FB_Results)) {
-    auto buffer = obj->describeElement(I->LastPicked.src.index);
-    PRINTF " You clicked %s -> (%s)", buffer.c_str(), cEditorSele1 ENDF(G);
-    OrthoRestorePrompt(G);
-  }
-
-  /*        ObjectMoleculeChooseBondDir(objMol,I->LastPicked.bond,
-     &I->LastPicked.src.index,&atIndex); */
-
-  {
-    auto buffer =
-        pymol::string_format("%s`%d", obj->Name, I->LastPicked.src.index + 1);
-    SelectorCreate(G, cEditorSele1, buffer.c_str(), nullptr, true, nullptr);
-  }
-
-  if (LastPicked.src.bond >= 0) {
-    int atIndex = obj->Bond[LastPicked.src.bond].index[0];
-    if (atIndex == LastPicked.src.index)
-      atIndex = obj->Bond[LastPicked.src.bond].index[1];
-    if (Feedback(G, FB_Scene, FB_Results)) {
-      auto buffer = obj->describeElement(atIndex);
-      PRINTF " You clicked %s -> (%s)", buffer.c_str(), cEditorSele2 ENDF(G);
-      OrthoRestorePrompt(G);
-    }
-
-    if (SettingGetGlobal_i(G, cSetting_logging)) {
-      auto buf1 =
-          ObjectMoleculeGetAtomSeleLog(obj, LastPicked.src.index, false);
-      auto buf2 = ObjectMoleculeGetAtomSeleLog(obj, atIndex, false);
-      auto buffer = pymol::string_format("cmd.edit(\"%s\",\"%s\")", buf1, buf2);
-      PLog(G, buffer, cPLog_pym);
-    }
-    auto buffer = pymol::string_format("%s`%d", obj->Name, atIndex + 1);
-    SelectorCreate(G, cEditorSele2, buffer.c_str(), nullptr, true, nullptr);
-    EditorActivate(G, SettingGetGlobal_i(G, cSetting_state) - 1, true);
-
-    if (mode == cButModePkTorBnd) {
-      /* get ready to drag */
-      SceneDontCopyNext(G);
-      EditorPrepareDrag(G, obj, -1, LastPicked.src.index,
-                        SettingGetGlobal_i(G, cSetting_state) - 1, mode);
-      I->SculptingFlag = 1;
-      I->SculptingSave = obj->AtomInfo[LastPicked.src.index].protekted;
-      obj->AtomInfo[LastPicked.src.index].protekted = cAtomProtected_drag;
-    }
-    WizardDoPick(G, 1, LastPicked.context.state);
-  } else {
-    WizardDoPick(G, 0, LastPicked.context.state);
-  }
-  if (SettingGetGlobal_b(G, cSetting_auto_hide_selections))
-    ExecutiveHideSelections(G);
-}
 
 /**
  * Handle logic for picking nothing
@@ -621,7 +242,6 @@ static int get_stereo_x(int x, int* last_x, int width, ClickSide* click_side) {
 void SceneClick(Block* block, int button, int x, int y, int mod, double when) {
   PyMOLGlobals* G = block->m_G;
   CScene* I = G->Scene;
-  const char* sel_mode_kw = "";
   int is_single_click =
       ((button == P_GLUT_SINGLE_LEFT) || (button == P_GLUT_SINGLE_MIDDLE) ||
        (button == P_GLUT_SINGLE_RIGHT));
@@ -869,29 +489,20 @@ void SceneClick(Block* block, int button, int x, int y, int mod, double when) {
         if (stereo_via_adjacent_array(I->StereoMode))
           x = get_stereo_x(x, nullptr, I->Width, nullptr);
 
-        if (SceneDoXYPick(G, x, y, click_side)) {
-          auto obj = I->LastPicked.context.object;
-          y = y - I->margin.bottom;
-          x = x - I->margin.left;
-          I->LastX = x;
-          I->LastY = y;
-          SceneClickTransformObject(G, obj, I->LastPicked, mode,
-                                    is_single_click);
-        } else { /* no atom picked */
-          switch (mode) {
-            case cButModeMenu:
+        /* no atom picked: GL color picking is gone */
+        switch (mode) {
+          case cButModeMenu:
 
-              MenuActivate3fv(G, I->LastWinX, I->LastWinY, I->LastWinX,
-                              I->LastWinY, is_single_click, "main_menu",
-                              I->LastClickVertex);
-              break;
-            default:
-              EditorInactivate(G);
-              if (SettingGetGlobal_i(G, cSetting_logging)) {
-                PLog(G, "cmd.edit()", cPLog_pym);
-              }
-              break;
-          }
+            MenuActivate3fv(G, I->LastWinX, I->LastWinY, I->LastWinX,
+                            I->LastWinY, is_single_click, "main_menu",
+                            I->LastClickVertex);
+            break;
+          default:
+            EditorInactivate(G);
+            if (SettingGetGlobal_i(G, cSetting_logging)) {
+              PLog(G, "cmd.edit()", cPLog_pym);
+            }
+            break;
         }
         SceneDirty(G);
         break;
@@ -900,22 +511,9 @@ void SceneClick(Block* block, int button, int x, int y, int mod, double when) {
         if (stereo_via_adjacent_array(I->StereoMode))
           x = get_stereo_x(x, nullptr, I->Width, &click_side);
 
-        if (SceneDoXYPick(G, x, y, click_side)) {
-          y = y - I->margin.bottom;
-          x = x - I->margin.left;
-          I->LastX = x;
-          I->LastY = y;
-
-          if (mode == cButModePkTorBnd) {
-            I->Threshold = 3;
-            I->ThresholdX = x;
-            I->ThresholdY = y;
-          }
-          SceneClickPickBond(G, x, y, mode, I->LastPicked);
-        } else {
-          EditorInactivate(G);
-          EditorLogState(G, false);
-        }
+        /* no atom picked: GL color picking is gone */
+        EditorInactivate(G);
+        EditorLogState(G, false);
         SceneInvalidate(G);
         break;
       case cButModeRotObj:
@@ -933,99 +531,10 @@ void SceneClick(Block* block, int button, int x, int y, int mod, double when) {
         if (stereo_via_adjacent_array(I->StereoMode))
           x = get_stereo_x(x, nullptr, I->Width, &click_side);
 
-        if (SceneDoXYPick(G, x, y, click_side)) {
-          auto obj = I->LastPicked.context.object;
-          y = y - I->margin.bottom;
-          x = x - I->margin.left;
-          I->LastX = x;
-          I->LastY = y;
-          switch (obj->type) {
-            case cObjectMolecule:
-
-              if (I->LastPicked.src.bond == cPickableLabel) {
-                /* if user picks a label with move object/move fragment,
-                   then move the object/fragment, not the label */
-
-                switch (mode) {
-                  case cButModeRotObj:
-                  case cButModeMovObj:
-                  case cButModeMovObjZ:
-                  case cButModeRotFrag:
-                  case cButModeMovFrag:
-                  case cButModeMovFragZ:
-                  case cButModeMovViewZ:
-                  case cButModeRotView:
-                  case cButModeMovView:
-                    I->LastPicked.src.bond = cPickableAtom;
-                    break;
-                }
-              }
-
-              switch (mode) {
-                case cButModeMovViewZ:
-                case cButModeRotView:
-                case cButModeMovView: {
-                  if (SettingGetGlobal_b(G, cSetting_movie_auto_store)) {
-                    ObjectTranslateTTT(obj, nullptr, true);
-                    I->MotionGrabbedObj = obj;
-                    obj->Grabbed = true;
-                    if (SettingGetGlobal_i(G,
-                                           cSetting_movie_auto_interpolate)) {
-                      I->ReinterpolateFlag = true;
-                      I->ReinterpolateObj = obj;
-                    }
-                  } else {
-                    ObjectTranslateTTT(obj, nullptr, false);
-                  }
-                } break;
-              }
-
-              if (I->LastPicked.src.bond >= cPickableAtom) {
-                if (Feedback(G, FB_Scene, FB_Results)) {
-                  auto buffer = obj->describeElement(I->LastPicked.src.index);
-                  PRINTF " You clicked %s", buffer.c_str() ENDF(G);
-                  OrthoRestorePrompt(G);
-                }
-              }
-              {
-                auto objMol = (ObjectMolecule*)obj;
-                EditorPrepareDrag(G, obj, -1, I->LastPicked.src.index,
-                                  SettingGetGlobal_i(G, cSetting_state) - 1,
-                                  mode);
-
-                if (I->LastPicked.src.bond >= cPickableAtom) {
-                  I->SculptingFlag = 1;
-                  I->SculptingSave =
-                      objMol->AtomInfo[I->LastPicked.src.index].protekted;
-                  objMol->AtomInfo[I->LastPicked.src.index].protekted =
-                      cAtomProtected_drag;
-                }
-              }
-              break;
-            case cObjectSlice:
-              if (ObjectSliceGetVertex(
-                      (ObjectSlice*)obj, I->LastPicked.src.index,
-                      I->LastPicked.src.bond, I->LastPickVertex)) {
-                I->LastPickVertexFlag = true;
-              }
-              break;
-            case cObjectMeasurement:
-              break;
-            case cObjectGadget:
-              break;
-            default:
-              EditorInactivate(G);
-              break;
-          }
-        }
         break;
 
       case cButModeSeleSet:
       case cButModeSeleToggle:
-        sel_mode_kw = SceneGetSeleModeKeyword(G);
-
-        /* intentional pass through */
-
       case cButModeLB:
       case cButModeMB:
       case cButModeRB:
@@ -1040,31 +549,8 @@ void SceneClick(Block* block, int button, int x, int y, int mod, double when) {
         if (stereo_via_adjacent_array(I->StereoMode))
           x = get_stereo_x(x, nullptr, I->Width, &click_side);
 
-        if (SceneDoXYPick(G, x, y, click_side)) {
-          auto obj = I->LastPicked.context.object;
-
-          assert(I->LastPicked.src.bond != cPickableNoPick);
-
-          if (mode == cButModeSimpleClick) {
-            float pos_store[3];
-            const float* pos = nullptr;
-            int const index = I->LastPicked.src.index; /* 1-based */
-            int const state = I->LastPicked.context.state;
-            auto objmol = dynamic_cast<ObjectMolecule const*>(obj);
-
-            if (objmol &&
-                ObjectMoleculeGetAtomTxfVertex(objmol, state, index, pos_store))
-              pos = pos_store;
-
-            PyMOL_SetClickReady(G->PyMOL, obj->Name, index, button, mod,
-                                I->LastWinX, I->Height - (I->LastWinY + 1), pos,
-                                state + 1 /* 1-based */,
-                                I->LastPicked.src.bond);
-          }
-          SceneClickObject(G, obj, I->LastPicked, mode, sel_mode_kw);
-        } else {  // Nothing picked
-          SceneClickPickNothing(G, button, mod, mode);
-        }
+        /* no atom picked: GL color picking is gone */
+        SceneClickPickNothing(G, button, mod, mode);
     }
 
     I->StartX = I->LastX;

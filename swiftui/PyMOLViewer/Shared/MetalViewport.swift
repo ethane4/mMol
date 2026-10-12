@@ -119,23 +119,6 @@ struct MetalViewport: NSViewRepresentable {
       action: #selector(Coordinator.handleRotationGesture(_:)))
     view.addGestureRecognizer(rotate)
 
-    // Click-debug harness (PYMOL_AUTOCLICK="ndcx,ndcy[;ndcx,ndcy...]"): after
-    // the scene renders, synthesize real clicks at the given NDC points
-    // through the genuine mouse path. Each click's mouse→NDC math and the
-    // resulting pick land in PYMOL_PICKDEBUG.
-    if let spec = ProcessInfo.processInfo.environment["PYMOL_AUTOCLICK"] {
-      let pts: [(CGFloat, CGFloat)] = spec.split(separator: ";").compactMap {
-        let c = $0.split(separator: ",").compactMap { Double($0) }
-        return c.count == 2 ? (CGFloat(c[0]), CGFloat(c[1])) : nil
-      }
-      for (i, p) in pts.enumerated() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0 + Double(i) * 1.0) {
-          [weak coordinator = context.coordinator] in
-          coordinator?.debugClick(ndcX: p.0, ndcY: p.1, in: view)
-        }
-      }
-    }
-
     return view
   }
 
@@ -155,7 +138,7 @@ class PyMOLMTKView: MTKView {
   // (they don't require first-responder status).
   // Keyboard shortcuts do NOT depend on this view's responder status: cmd.set_key
   // bindings are dispatched from an app-level NSEvent monitor in ContentView
-  // (installPyMOLKeyMonitor, #258), which sees keys regardless of focus.
+  // (installKeyMonitor, #258), which sees keys regardless of focus.
   override var acceptsFirstResponder: Bool { false }
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
@@ -312,7 +295,6 @@ extension MetalViewport {
   class Coordinator: NSObject, MTKViewDelegate {
     weak var engine: PyMOLEngine?
     weak var mtkView: MTKView?
-    private var viewportSize: CGSize = .zero
     // Set when the app/display wakes (unlock, system wake, re-activate). The
     // next draw(in:) then renders unconditionally, bypassing the on-demand
     // gate, to repaint a drawable whose contents were discarded during sleep.
@@ -419,7 +401,6 @@ extension MetalViewport {
     // MARK: - MTKViewDelegate
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-      viewportSize = size
       engine?.viewportPixelSize = size
       engine?.reshape(width: Int(size.width), height: Int(size.height))
     }
@@ -511,7 +492,7 @@ extension MetalViewport {
         // frame. A synchronous heavy op (image export / Copy Image)
         // leaves the scene clean, and waiting for "build frames" that
         // never render held its overlay up until the 60 s backstop.
-        engine.heavyRenderTick(presented: false)
+        engine.heavyRenderTick()
         return
       case .throttle:
         return
@@ -540,7 +521,7 @@ extension MetalViewport {
       // This frame built any deferred rep geometry (e.g. a surface mesh);
       // let the engine clear the "Calculating…" overlay once the build
       // frame(s) have completed.
-      engine.heavyRenderTick(presented: presented)
+      engine.heavyRenderTick()
     }
 
     // MARK: - Coordinate conversion
@@ -833,17 +814,6 @@ extension MetalViewport {
         if w > 0, h > 0 {
           let ndcX = Float(loc.x / w) * 2 - 1
           let ndcY = Float(loc.y / h) * 2 - 1
-          // Pick-debug: record the click in top-down (SwiftUI) points so
-          // the overlay crosshair lands exactly where the user clicked.
-          if PyMOLEngine.debugPickEnabled {
-            engine?.debugClickPoint = CGPoint(x: loc.x, y: h - loc.y)
-          }
-          Self.pickDbg(
-            String(
-              format:
-                "mouseUp loc=(%.1f,%.1f) bounds=(%.1f,%.1f) backing=%.2f -> ndc=(%.4f,%.4f) aspect=%.4f",
-              loc.x, loc.y, w, h, view.window?.backingScaleFactor ?? 0,
-              ndcX, ndcY, Float(w / h)))
           if engine?.measureMode != nil {
             engine?.measurePick(ndcX: ndcX, ndcY: ndcY, aspect: Float(w / h))
           } else {
@@ -851,48 +821,6 @@ extension MetalViewport {
           }
         }
       }
-    }
-
-    // --- Click-debug harness (PYMOL_AUTOCLICK) ---
-    // Append a line to PYMOL_PICKDEBUG so the mouse→NDC math is visible
-    // alongside pick_at's projection (which logs to the same file).
-    static func pickDbg(_ s: String) {
-      guard let path = ProcessInfo.processInfo.environment["PYMOL_PICKDEBUG"] else { return }
-      if let fh = FileHandle(forWritingAtPath: path)
-        ?? {
-          FileManager.default.createFile(atPath: path, contents: nil)
-          return FileHandle(forWritingAtPath: path)
-        }()
-      {
-        fh.seekToEndOfFile()
-        fh.write((s + "\n").data(using: .utf8)!)
-        try? fh.close()
-      }
-    }
-
-    // Synthesize a real left-click at the given NDC by converting NDC → view
-    // point → window point and dispatching genuine NSEvents through the
-    // view's mouseDown/mouseUp — the EXACT path a user click takes. Lets the
-    // debug harness click precise scene positions without Accessibility.
-    func debugClick(ndcX: CGFloat, ndcY: CGFloat, in view: MTKView) {
-      let w = view.bounds.width
-      let h = view.bounds.height
-      guard w > 0, h > 0, let win = view.window else { return }
-      let vp = CGPoint(x: (ndcX + 1) / 2 * w, y: (ndcY + 1) / 2 * h)  // bottom-left
-      let winPt = view.convert(vp, to: nil)
-      let ts = ProcessInfo.processInfo.systemUptime
-      let mk = { (type: NSEvent.EventType) -> NSEvent? in
-        NSEvent.mouseEvent(
-          with: type, location: winPt, modifierFlags: [],
-          timestamp: ts, windowNumber: win.windowNumber,
-          context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
-      }
-      Self.pickDbg(
-        String(
-          format: "debugClick ndc=(%.4f,%.4f) -> vpoint=(%.1f,%.1f) winpoint=(%.1f,%.1f)",
-          Float(ndcX), Float(ndcY), vp.x, vp.y, winPt.x, winPt.y))
-      if let d = mk(.leftMouseDown) { view.mouseDown(with: d) }
-      if let u = mk(.leftMouseUp) { view.mouseUp(with: u) }
     }
 
     func handleMouseDragged(_ event: NSEvent, in view: MTKView) {

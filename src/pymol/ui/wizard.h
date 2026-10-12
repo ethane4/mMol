@@ -44,7 +44,4 @@ int WizardDoPosition(PyMOLGlobals* G, int force);
 void WizardDirty(PyMOLGlobals* G);
 int WizardUpdate(PyMOLGlobals* G);
 
-void WizardSetWizards(PyMOLGlobals* G,
-                      const std::vector<unique_PyObject_ptr_auto_gil>& wizs);
-
 #endif

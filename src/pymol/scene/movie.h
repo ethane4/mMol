@@ -86,7 +86,6 @@ struct CMovie : public Block {
   int click(int button, int x, int y, int mod) override;
   int drag(int x, int y, int mod) override;
   void draw(CGO* orthoCGO) override;
-  bool fastDraw(CGO* orthoCGO) override;
   void reshape(int width, int height) override;
 };
 

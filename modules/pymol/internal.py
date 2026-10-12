@@ -7,7 +7,7 @@ from pymol import _cmd
 import threading
 import traceback
 
-import urllib.request as urllib2
+import urllib.request
 
 import re
 import time
@@ -134,21 +134,6 @@ def _cache_set(new_entry, max_size, _self=cmd):
 
 
 # ray tracing threads
-
-
-def _ray_anti_spawn(thread_info, _self=cmd):
-    # WARNING: internal routine, subject to change
-    # internal routine to support multithreaded raytracing
-    thread_list = []
-    for a in thread_info[1:]:
-        t = threading.Thread(target=_cmd.ray_anti_thread, args=(_self._COb, a))
-        t.setDaemon(1)
-        thread_list.append(t)
-    for t in thread_list:
-        t.start()
-    _cmd.ray_anti_thread(_self._COb, thread_info[0])
-    for t in thread_list:
-        t.join()
 
 
 def _ray_hash_spawn(thread_info, _self=cmd):
@@ -310,10 +295,10 @@ def file_read(finfo, _self=cmd):
         if not is_string(finfo):
             handle = finfo
         elif '://' in finfo:
-            req = urllib2.Request(
+            req = urllib.request.Request(
                 finfo,
                 headers={'User-Agent': 'PyMOL/' + _self.get_version()[0]})
-            handle = urllib2.urlopen(req)
+            handle = urllib.request.urlopen(req)
         else:
             handle = open(finfo, 'rb')
         contents = handle.read()
@@ -575,11 +560,6 @@ def _quit(code=0, _self=cmd):
                 del pymol._log_file
         except:
             pass
-        if _self.reaper is not None:
-            try:
-                _self.reaper.join()
-            except:
-                pass
         r = _cmd.quit(_self._COb, int(code))
     finally:
         _self.unlock(-1, _self)

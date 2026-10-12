@@ -40,8 +40,6 @@ struct ObjectVolumeState : public CObjectState {
   WordType caption{};
   float Corner[24];
   /* not stored */
-  pymol::cache_array<std::size_t, 3>
-      textures{};  // 3D volume (map), 1D/2D color table, 3D carvemask
   pymol::copyable_ptr<CField> carvemask;
   unsigned int dim[3]{};
   pymol::copyable_ptr<Isofield> Field;
@@ -52,7 +50,6 @@ struct ObjectVolumeState : public CObjectState {
   int isUpdated = false;
 
   ObjectVolumeState(PyMOLGlobals* G);
-  ~ObjectVolumeState();
 };
 
 struct ObjectVolume : public pymol::CObject {

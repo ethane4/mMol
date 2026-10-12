@@ -72,9 +72,7 @@ short CharacterRenderOpenGL(PyMOLGlobals* G, const RenderInfo* info, int id,
       float *v, v0[3];
       float v1[3];
       if (!shaderCGO) {
-        if (!TextGetIsPicking(G)) {
-          TextureBindTexture(G);
-        }
+        TextureBindTexture(G);
       }
       v = TextGetPos(G);
       copy3f(v, v0);

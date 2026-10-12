@@ -60,21 +60,6 @@ void ColorUpdateFrontFromSettings(PyMOLGlobals* G) {
   }
 }
 
-static int SettingCheckUseShaders(CSetting* I, int quiet) {
-  PyMOLGlobals* G = I->G;
-  if (SettingGetGlobal_i(G, cSetting_use_shaders)) {
-    if (G->ShaderMgr->IsConfigured() && !G->ShaderMgr->ShadersPresent()) {
-      SettingSet_b(I, cSetting_use_shaders, 0);
-      if (!quiet) {
-        PRINTFB(G, FB_Setting, FB_Warnings)
-        "Setting-Error: use_shaders cannot be set when Shaders are not "
-        "available, setting use_shaders back to false\n" ENDFB(G);
-      }
-      return 1;
-    }
-  }
-  return 0;
-}
 /**
  * Get the indices of all settings that have changed since last calling
  * this function. Resets the "changed" flag.
@@ -160,8 +145,6 @@ void SettingGenerateSideEffects(PyMOLGlobals* G, int index, const char* sele,
       SceneChanged(G);
       break;
     case cSetting_grid_mode:
-      if (!SettingGetGlobal_i(G, cSetting_grid_mode))
-        G->ShaderMgr->ResetUniformSet();
       ExecutiveUpdateSceneMembers(G);
     case cSetting_grid_slot:
       ExecutiveInvalidateGroups(G, false);
@@ -187,11 +170,7 @@ void SettingGenerateSideEffects(PyMOLGlobals* G, int index, const char* sele,
     case cSetting_seq_view_fill_color:
     case cSetting_seq_view_fill_char:
     case cSetting_seq_view_label_color:
-      OrthoDirty(G);
-      break;
     case cSetting_show_frame_rate:
-      OrthoDirty(G);
-      break;
     case cSetting_group_full_member_names:
     case cSetting_group_arrow_prefix:
       OrthoDirty(G);
@@ -266,17 +245,6 @@ void SettingGenerateSideEffects(PyMOLGlobals* G, int index, const char* sele,
         "excl_display_lists_shaders no longer work.\n" ENDFB(G);
       }
     case cSetting_use_geometry_shaders:
-      if (SettingGetGlobal_i(G, cSetting_use_geometry_shaders) &&
-          G->ShaderMgr->IsConfigured() &&
-          !G->ShaderMgr->GeometryShadersPresent()) {
-        SettingSet_b(G->Setting, cSetting_use_geometry_shaders, 0);
-        if (!quiet) {
-          PRINTFB(G, FB_Setting, FB_Warnings)
-          "Setting-Error: geometry shaders not available\n" ENDFB(G);
-        }
-        return;
-      }
-
       ExecutiveInvalidateRep(G, inv_sele, cRepLabel, cRepInvRep);
       {
         // check if lines need to be invalidated
@@ -294,11 +262,6 @@ void SettingGenerateSideEffects(PyMOLGlobals* G, int index, const char* sele,
       break;
     case cSetting_use_shaders: {
       short changed = 0;
-      if (SettingGetGlobal_b(G, cSetting_use_shaders)) {
-        if (SettingCheckUseShaders(G->Setting, quiet)) {
-          return;
-        }
-      }
       SceneInvalidate(G);
       if (SettingGetGlobal_b(G, cSetting_sphere_use_shader)) {
         ExecutiveInvalidateRep(G, inv_sele, cRepSphere, cRepInvRep);
@@ -400,9 +363,6 @@ void SettingGenerateSideEffects(PyMOLGlobals* G, int index, const char* sele,
     case cSetting_gradient_step_size:
     case cSetting_gradient_min_slope:
     case cSetting_gradient_symmetry:
-      ExecutiveInvalidateRep(G, inv_sele, cRepMesh, cRepInvRep);
-      SceneChanged(G);
-      break;
     case cSetting_min_mesh_spacing:
     case cSetting_mesh_grid_max:
     case cSetting_mesh_cutoff:
@@ -498,17 +458,6 @@ void SettingGenerateSideEffects(PyMOLGlobals* G, int index, const char* sele,
     case cSetting_alignment_as_cylinders:
     case cSetting_cartoon_nucleic_acid_as_cylinders:
       if (SettingGetGlobal_b(G, cSetting_render_as_cylinders)) {
-        if (G->ShaderMgr->shaders_present &&
-            !G->ShaderMgr->ShaderPrgExists("cylinder")) {
-          SettingSet_b(G->Setting, cSetting_render_as_cylinders, 0);
-          if (!quiet) {
-            PRINTFB(G, FB_Setting, FB_Warnings)
-            "Setting-Error: render_as_cylinders cannot be set when the "
-            "Cylinder Shader is not available, setting render_as_cylinder back "
-            "to false\n" ENDFB(G);
-          }
-          return;
-        }
         switch (index) {
           case cSetting_render_as_cylinders:
           case cSetting_cartoon_nucleic_acid_as_cylinders:

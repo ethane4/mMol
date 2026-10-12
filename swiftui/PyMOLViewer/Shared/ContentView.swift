@@ -54,19 +54,9 @@ struct ContentView: View {
   @State private var sceneRenameText = ""
   // Drag-and-drop: true while a file is hovered over the viewport (draws a border).
   @State private var isViewportDropTargeted = false
-  // Local key-down monitor token for the Esc → clear-selection handler
-  // (issues #163 + #166). Installed in macOSLayout.onAppear, removed on
-  // .onDisappear. NSEvent.addLocalMonitorForEvents (not .onKeyPress, which is
-  // macOS 14+) keeps us on the macOS 13 deployment target.
-  @State private var escKeyMonitor: Any?
-  // Local key-down monitor token for cmd.set_key dispatch (#258). Same
-  // rationale as escKeyMonitor above: MetalViewport declines first-responder
-  // status (#73), so the viewport never receives keyDown and a monitor is the
-  // only way to see keys at all. Installed/removed alongside it.
-  @State private var pymolKeyMonitor: Any?
-  // Local key-down monitor token for Tab / Shift+Tab → cycle the selection
-  // mode (#319). Same rationale and lifecycle as the two monitors above.
-  @State private var selectionModeKeyMonitor: Any?
+  // Local key-down monitor token (installKeyMonitor): Esc, cmd.set_key
+  // bindings, Tab. Installed in macOSLayout.onAppear, removed on .onDisappear.
+  @State private var keyMonitor: Any?
   @EnvironmentObject private var mcpManager: MCPServerManager
   @State private var showConnectSheet = false
 
@@ -521,25 +511,15 @@ struct ContentView: View {
           engine.lastScrollAt = CACurrentMediaTime()
           return e
         }
-        installEscKeyMonitor()
-        installPyMOLKeyMonitor()
-        installSelectionModeKeyMonitor()
+        installKeyMonitor()
         // The sequence strip is on at every launch, listing whatever gets
         // loaded (Display ▸ Sequence still hides it).
         engine.sequenceVisible = true
       }
       .onDisappear {
-        if let token = escKeyMonitor {
+        if let token = keyMonitor {
           NSEvent.removeMonitor(token)
-          escKeyMonitor = nil
-        }
-        if let token = pymolKeyMonitor {
-          NSEvent.removeMonitor(token)
-          pymolKeyMonitor = nil
-        }
-        if let token = selectionModeKeyMonitor {
-          NSEvent.removeMonitor(token)
-          selectionModeKeyMonitor = nil
+          keyMonitor = nil
         }
       }
   }
@@ -657,101 +637,73 @@ struct ContentView: View {
     return (false, false)
   }
 
-  // Esc → back out one level. A local key-down monitor rather than .onKeyPress
-  // because the whole main window must catch Esc even when the viewport isn't
-  // the SwiftUI focus — MetalViewport deliberately declines first-responder
-  // status (issue #73) so the command line stays hot for typing.
-  //
-  // The ladder, in order (issues #163 + #166, then #235):
-  //   (a) a sheet / panel / popover is up (their window is key, not the main
-  //       mMol window) — Esc belongs to it, pass through so it dismisses;
+  // The main window's key handling: one local key-down monitor rather than
+  // .onKeyPress, because MetalViewport deliberately declines first-responder
+  // status (#73) so the command line stays hot for typing — keyDown never
+  // reaches the viewport, and a monitor is the only way to see keys at all.
+  // Three handlers, tried in order; none can contend with another (Esc never
+  // yields a PyMOL key token, and Tab carries neither CTRL nor ALT so it never
+  // does either). In every one, a sheet / panel / popover that is the key
+  // window owns its keys (secondaryWindowOwnsKeys) and gets the event.
+  private func installKeyMonitor() {
+    guard keyMonitor == nil else { return }
+    keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      if secondaryWindowOwnsKeys() { return event }
+      if event.keyCode == 53 { return handleEscape() }  // 53 = Esc
+      if let consumed = handlePyMOLKey(event) { return consumed ? nil : event }
+      if let step = KeyRouting.selectionModeStep(
+        keyCode: event.keyCode,
+        modifiers: event.modifierFlags,
+        textEditingActive: textFocusFlags().editing)
+      {
+        // Tab / Shift+Tab → cycle the selection mode (#319), the same
+        // atoms/residues/chains/… list SelectionModeMenu shows. Which Tab
+        // presses are ours lives in KeyRouting.selectionModeStep (pure,
+        // unit-tested): bare Tab and Shift+Tab only, never while a field is
+        // mid-edit, so the command line's Tab completion is untouched.
+        SelectionModeMenu.cycle(engine, forward: step > 0)
+        return nil  // consume — don't move keyboard focus as well
+      }
+      return event
+    }
+  }
+
+  // Esc → back out one level (issues #163 + #166, then #235):
+  //   (a) a sheet / panel / popover is up — handled by the monitor's guard;
   //   (b) an exclusive interaction mode (Move / Measure) is active —
   //       leave it, then consume;
   //   (c) otherwise — two-stage clear selection, then consume.
-  // Non-Esc keys always pass through untouched.
-  private func installEscKeyMonitor() {
-    guard escKeyMonitor == nil else { return }
-    escKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-      guard event.keyCode == 53 else { return event }  // 53 = Esc
-      // (a) A modal/sheet/panel/popover owns the interaction → let it handle
-      // Esc (dismiss). See secondaryWindowOwnsKeys above.
-      if secondaryWindowOwnsKeys() { return event }
-      // NOTE: intentionally does NOT defer to a focused text field — Esc
-      // acts regardless of keyboard focus (incl. while the command-line box
-      // is focused), per product decision. Only true modal/sheet/panel
-      // windows above still get Esc for dismissal.
-      //
-      // (b) Leaving an interaction mode outranks clearing the selection —
-      // #166 anticipated exactly this ("exiting a mode should take priority
-      // before the selection stages kick in"). Routed through the engine so
-      // Esc reuses each mode's own exit path rather than duplicating it.
-      if engine.exitActiveInteractionMode() { return nil }
-      // (c) No mode was active → the selection stages.
-      engine.escapeClearSelection()
-      return nil  // consume — don't beep or propagate
-    }
+  // Esc acts regardless of keyboard focus (incl. while the command-line box is
+  // focused), per product decision.
+  private func handleEscape() -> NSEvent? {
+    // (b) Leaving an interaction mode outranks clearing the selection —
+    // #166 anticipated exactly this ("exiting a mode should take priority
+    // before the selection stages kick in"). Routed through the engine so
+    // Esc reuses each mode's own exit path rather than duplicating it.
+    if engine.exitActiveInteractionMode() { return nil }
+    // (c) No mode was active → the selection stages.
+    engine.escapeClearSelection()
+    return nil  // consume — don't beep or propagate
   }
 
-  // cmd.set_key dispatch (#258). A local key-down monitor for the same reason
-  // the Esc handler is one: MetalViewport deliberately declines
-  // first-responder status (#73), so keyDown never reaches the viewport and
-  // the app would otherwise never see a key at all.
-  //
-  // The consume rule is the whole conflict policy: KeyRouting decides whether
-  // an event is even a candidate, then we consume it ONLY if a binding
-  // actually fired. So an unbound ⌃M falls through to the Move menu item
-  // naturally, while a user-bound ⌃M shadows it — no reserved-key table
-  // needed. Esc (keyCode 53) never yields a token, so this monitor and the Esc
-  // one never contend.
-  private func installPyMOLKeyMonitor() {
-    guard pymolKeyMonitor == nil else { return }
-    pymolKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-      // Shared modal/sheet/panel guard (secondaryWindowOwnsKeys above):
-      // if a sheet, alert, or popover is the key window, keys belong to
-      // it — pgup/pgdn must not change scenes behind an open
-      // Fetch-from-PDB sheet, for example.
-      if secondaryWindowOwnsKeys() { return event }
-
-      let focus = textFocusFlags()
-      guard
-        let token = KeyRouting.token(
-          keyCode: event.keyCode,
-          charactersIgnoringModifiers: event.charactersIgnoringModifiers,
-          modifiers: event.modifierFlags,
-          textFieldFocused: focus.focused,
-          textEditingActive: focus.editing)
-      else { return event }
-      return engine.invokeKeyBinding(token) ? nil : event
-    }
+  // cmd.set_key dispatch (#258): nil when the event is not a binding
+  // candidate, else whether a binding fired. The consume rule is the whole
+  // conflict policy: KeyRouting decides whether an event is even a candidate,
+  // then it is consumed ONLY if a binding actually fired. So an unbound ⌃M
+  // falls through to the Move menu item naturally, while a user-bound ⌃M
+  // shadows it — no reserved-key table needed.
+  private func handlePyMOLKey(_ event: NSEvent) -> Bool? {
+    let focus = textFocusFlags()
+    guard
+      let token = KeyRouting.token(
+        keyCode: event.keyCode,
+        charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+        modifiers: event.modifierFlags,
+        textFieldFocused: focus.focused,
+        textEditingActive: focus.editing)
+    else { return nil }
+    return engine.invokeKeyBinding(token)
   }
-
-  // Tab / Shift+Tab → cycle the selection mode (#319), i.e. the same
-  // atoms/residues/chains/… list SelectionModeMenu shows. A third local
-  // monitor for the same reason as the two above (#73), and it cannot contend
-  // with them: Esc only looks at keyCode 53, and Tab carries neither CTRL nor
-  // ALT so KeyRouting.token always returns nil for it.
-  //
-  // Which Tab presses are ours lives in KeyRouting.selectionModeStep (pure,
-  // unit-tested) — bare Tab and Shift+Tab only, and never while a field is
-  // mid-edit, so the command line's Tab completion is untouched. The
-  // modal/sheet/panel guard stays here alongside the other monitors', and as
-  // with the Esc monitor the event is consumed only when the shortcut
-  // actually fires; otherwise it falls through to normal focus navigation.
-  private func installSelectionModeKeyMonitor() {
-    guard selectionModeKeyMonitor == nil else { return }
-    selectionModeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-      guard
-        let step = KeyRouting.selectionModeStep(
-          keyCode: event.keyCode,
-          modifiers: event.modifierFlags,
-          textEditingActive: textFocusFlags().editing)
-      else { return event }
-      if secondaryWindowOwnsKeys() { return event }
-      SelectionModeMenu.cycle(engine, forward: step > 0)
-      return nil  // consume — don't move keyboard focus as well
-    }
-  }
-
   // The macOS viewport: the Metal view plus its floating overlays and the
   // right-click context menu. Extracted from macOSLayout's body so the
   // type-checker can resolve each in isolation (the inline chain tripped the
@@ -782,9 +734,6 @@ struct ContentView: View {
       // (The Move-mode gizmo is a 3D CGO object rendered in the Metal
       // scene by mmol/move.py; no SwiftUI overlay is needed. Input is
       // hit-tested against the projected geometry in MetalViewport.)
-      // Pick-debug crosshair: marks exactly where the last click landed,
-      // so a screenshot shows click-vs-selection offset.
-      .overlay { debugClickMarker }
       // Right-click (or a trackpad double-click) in the viewport picks the
       // atom/residue under the pointer (or empty space) and sets
       // engine.longPressHit; open the classic menu for it at the pointer.
@@ -835,14 +784,7 @@ struct ContentView: View {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     // A chosen .pse replaces the whole session (no multi-window yet, #29) —
     // same warn/save/cancel stopgap as the Finder open path (issue #349).
-    guard confirmReplaceSessionIfNeeded(opening: url, engine: engine) else { return }
-    let raw = url.deletingPathExtension().lastPathComponent
-    var name = String(raw.map { $0.isLetter || $0.isNumber ? $0 : "_" })
-    if name.isEmpty { name = "mol" }
-    engine.loadStructure(path: url.path, name: name)
-    // Track an opened .pse as the current document so ⌘S overwrites it; a
-    // non-.pse structure clears the tracked document.
-    engine.currentSessionURL = (url.pathExtension.lowercased() == "pse") ? url : nil
+    loadOpenedFile(url, into: engine)
   }
 
   private func macFetch() {
@@ -1000,12 +942,12 @@ struct ContentView: View {
     panel.canCreateDirectories = true
     panel.title = "Save Structure (.\(ext))"
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    engine.runPython("from pymol import cmd as _c\n_c.save(r'''\(url.path)''')")
+    engine.runPython("from pymol import cmd as _c\n_c.save(\(pyLiteral(url.path)))")
   }
 
   private func shareSession() {
     let tmp = (NSTemporaryDirectory() as NSString).appendingPathComponent("pymol_share.pse")
-    engine.runPython("from pymol import cmd as _c; _c.save(r'''\(tmp)''')")
+    engine.runPython("from pymol import cmd as _c; _c.save(\(pyLiteral(tmp)))")
     let sessionURL = URL(fileURLWithPath: tmp)
     presentShare(items: [sessionURL])
   }
@@ -1021,23 +963,6 @@ struct ContentView: View {
 
   // A thin bar over the top of the viewport while measure mode is active:
   // pick the measurement type, see the live prompt/result, clear, or exit.
-  // Pick-debug: a cyan crosshair + ring at the exact pixel of the last click,
-  // overlaid on the viewport (same top-down coordinate space as the MTKView).
-  // Lets a screenshot directly compare where the user clicked vs where the pink
-  // selection square rendered. Only present when PYMOL_PICKDEBUG is set.
-  @ViewBuilder
-  private var debugClickMarker: some View {
-    if PyMOLEngine.debugPickEnabled, let p = engine.debugClickPoint {
-      ZStack {
-        Circle().stroke(Color.cyan, lineWidth: 1.5).frame(width: 22, height: 22)
-        Rectangle().fill(Color.cyan).frame(width: 1.5, height: 14)
-        Rectangle().fill(Color.cyan).frame(width: 14, height: 1.5)
-      }
-      .position(p)
-      .allowsHitTesting(false)
-    }
-  }
-
   private var measureOverlay: some View {
     HStack(spacing: 10) {
       Picker(

@@ -2,18 +2,6 @@ import sys
 import os
 
 
-def _unicode(s):
-    # Return - if possible - unicode, or if the byte string can't be
-    # decoded, return an all-ascii representation (which is fine for
-    # reporting in diagnostics)
-    if isinstance(s, bytes):
-        try:
-            s = s.decode(sys.getfilesystemencoding() or 'ascii')
-        except UnicodeError:
-            s = repr(s)
-    return s
-
-
 def diagnostics(filename='', compact=0, quiet=1):
     '''Get system level diagnostics data
 
@@ -61,15 +49,12 @@ def diagnostics(filename='', compact=0, quiet=1):
     body += str(renderer[1] or '(none)') + '\n'
     body += str(renderer[2] or '(none)') + '\n'
 
-    body += diagnostics_qt()
-
     if not compact:
         body += diagnostics_python()
 
         body += '\nStartup Scripts:\n'
         pymolrc = invocation.get_user_config()
         if pymolrc:
-            pymolrc = map(_unicode, pymolrc)
             body += '\n'.join(pymolrc) + '\n'
         else:
             body += '(no pymolrc file found)\n'
@@ -122,20 +107,7 @@ def diagnostics_platform(compact=False):
 
     body += platform.platform() + '\n'
 
-    if platform.system() == 'Linux':
-        body += platform.version() + '\n'
-
     return body
-
-
-def diagnostics_qt():
-    try:
-        from pymol.Qt import QtCore
-        return u'{} {} (Qt {})\n'.format(
-            QtCore.__name__.split('.')[0],
-            getattr(QtCore, "PYQT_VERSION_STR", "<N/A>"), QtCore.QT_VERSION_STR)
-    except Exception as e:
-        return u'({})\n'.format(e)
 
 
 def diagnostics_python():
@@ -145,8 +117,8 @@ def diagnostics_python():
             u'executable={exe}\n'
             u'filesystemencoding={enc}\n')
     return tmpl.format(v=sys.version,
-                       p=_unicode(sys.prefix),
-                       exe=_unicode(sys.executable),
+                       p=sys.prefix,
+                       exe=sys.executable,
                        enc=sys.getfilesystemencoding())
 
 
@@ -157,8 +129,8 @@ def diagnostics_env_vars():
     body = '\nQt, Python and PyMOL Environment Variables:\n'
     for key in sorted(os.environ):
         if re.search(r'^PY|QT|^LANG', key) and not (key == 'PYMOL_SCRIPTS'):
-            body += u'%s=%s\n' % (key, _unicode(os.environ[key]))
+            body += u'%s=%s\n' % (key, os.environ[key])
 
     body += '\nPATH:\n'
-    body += textwrap.fill(_unicode(os.getenv('PATH', '')), 78) + '\n'
+    body += textwrap.fill(os.getenv('PATH', ''), 78) + '\n'
     return body

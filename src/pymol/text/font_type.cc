@@ -56,14 +56,12 @@ static void GenerateCharFngrprnt(PyMOLGlobals* G, CharFngrprnt* fprnt,
   fprnt->u.i.text_id = TextID;
   fprnt->u.i.size = (int)(size * 64 * sampling);
   rgba = fprnt->u.i.color;
-  if (!TextGetIsPicking(G)) {
+  TextGetColorUChar(G, rgba, rgba + 1, rgba + 2, rgba + 3);
+  rgba = fprnt->u.i.outline_color;
+  if (no_flat || !flat) {
+    TextGetOutlineColor(G, rgba, rgba + 1, rgba + 2, rgba + 3);
+  } else if (flat) {
     TextGetColorUChar(G, rgba, rgba + 1, rgba + 2, rgba + 3);
-    rgba = fprnt->u.i.outline_color;
-    if (no_flat || !flat) {
-      TextGetOutlineColor(G, rgba, rgba + 1, rgba + 2, rgba + 3);
-    } else if (flat) {
-      TextGetColorUChar(G, rgba, rgba + 1, rgba + 2, rgba + 3);
-    }
   }
   fprnt->u.i.ch = c;
   fprnt->u.i.flat = flat;

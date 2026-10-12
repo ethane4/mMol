@@ -7,8 +7,6 @@ scripts are in) records the user's defaults; `reset()` returns to them.
 """
 
 import json
-import os
-import tempfile
 
 from pymol import cmd
 
@@ -130,7 +128,8 @@ def emit():
         for g, s, l, k, x in SPEC
     ]
     # via a file: the console would wrap a line this long
-    path = os.path.join(tempfile.gettempdir(), 'mmol_render_options.json')
+    from mmol import tmp as mmol_tmp
+    path = mmol_tmp.channel_path('mmol_render_options')
     with open(path, 'w') as f:
         json.dump({'spec': spec, 'values': values}, f)
     print('RENDEROPTS:' + path)

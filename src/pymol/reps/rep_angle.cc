@@ -22,6 +22,7 @@ Z* -------------------------------------------------------------------
 
 #include "pymol/base/err.h"
 #include "pymol/reps/rep_angle.h"
+#include "pymol/reps/rep_dash_internal.h"
 #include "pymol/color/color.h"
 #include "pymol/scene/scene.h"
 #include "pymol/app/main.h"
@@ -32,36 +33,25 @@ Z* -------------------------------------------------------------------
 #include "pymol/graphics/cgo.h"
 #include "pymol/objects/coord_set.h"
 #include "pymol/base/feedback.h"
-
-struct RepAngle : Rep {
-  using Rep::Rep;
-
-  ~RepAngle() override;
-
-  cRep_t type() const override { return cRepAngle; }
-  void render(RenderInfo* info) override;
-
-  pymol::vla<float> V;
-  int N = 0;
-
-  DistSet* ds;
-  float linewidth, radius;
-  CGO* shaderCGO = nullptr;
-};
-
 #include "pymol/objects/object_dist.h"
 
-RepAngle::~RepAngle() { CGOFree(shaderCGO); }
+struct RepAngle : RepDashLines {
+  RepAngle(pymol::CObject* obj, int state)
+      : RepDashLines(obj, state, cSetting_angle_color) {}
+  cRep_t type() const override { return cRepAngle; }
+};
 
-static int RepAngleCGOGenerate(RepAngle* I, RenderInfo* info) {
+RepDashLines::~RepDashLines() { CGOFree(shaderCGO); }
+
+static int RepDashLinesCGOGenerate(RepDashLines* I, RenderInfo* info) {
   PyMOLGlobals* G = I->G;
   float line_width;
   int ok = true;
   CGO* convertcgo = nullptr;
   int dash_as_cylinders = SettingGetGlobal_b(G, cSetting_render_as_cylinders) &&
                           SettingGetGlobal_b(G, cSetting_dash_as_cylinders);
-  int color = SettingGet_color(G, nullptr, I->ds->Obj->Setting.get(),
-                               cSetting_angle_color);
+  int color =
+      SettingGet_color(G, nullptr, I->ds->Obj->Setting.get(), I->color_setting);
   I->linewidth = line_width =
       SettingGet_f(G, nullptr, I->ds->Obj->Setting.get(), cSetting_dash_width);
   I->radius =
@@ -147,9 +137,7 @@ static int RepAngleCGOGenerate(RepAngle* I, RenderInfo* info) {
   return ok;
 }
 
-// Immediate mode rendering removed — shader path is always used
-
-void RepAngle::render(RenderInfo* info) {
+void RepDashLines::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
   auto pick = info->pick;
@@ -161,8 +149,8 @@ void RepAngle::render(RenderInfo* info) {
   int ok = true;
   float dash_transparency;
   short dash_transparency_enabled;
-  int color = SettingGet_color(G, nullptr, I->ds->Obj->Setting.get(),
-                               cSetting_angle_color);
+  int color =
+      SettingGet_color(G, nullptr, I->ds->Obj->Setting.get(), color_setting);
   if (color < 0) color = getObj()->Color;
   I->linewidth = line_width =
       SettingGet_f(G, nullptr, I->ds->Obj->Setting.get(), cSetting_dash_width);
@@ -197,12 +185,8 @@ void RepAngle::render(RenderInfo* info) {
     }
 
     vc = ColorGet(G, color);
-    v = I->V.data();
-    c = I->N;
 
     while (ok && c > 0) {
-      /*      printf("%8.3f %8.3f %8.3f   %8.3f %8.3f %8.3f
-       * \n",v[3],v[4],v[5],v[6],v[7],v[8]); */
       if (round_ends) {
         ok &= ray->sausage3fv(v, v + 3, radius, vc, vc);
       } else {
@@ -213,42 +197,32 @@ void RepAngle::render(RenderInfo* info) {
       c -= 2;
     }
 
-  } else if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-    } else {
-      short use_shader, generate_shader_cgo = 0;
+  } else if (G->HaveGUI && G->ValidContext && !pick) {
+    short use_shader = SettingGetGlobal_b(G, cSetting_dash_use_shader) &
+                       SettingGetGlobal_b(G, cSetting_use_shaders);
 
-      use_shader = SettingGetGlobal_b(G, cSetting_dash_use_shader) &
-                   SettingGetGlobal_b(G, cSetting_use_shaders);
-
-      if (!use_shader && I->shaderCGO) {
-        CGOFree(I->shaderCGO);
-        I->shaderCGO = 0;
-      }
-      if (use_shader) {
-        if (!I->shaderCGO) {
-          I->shaderCGO = CGONew(G);
-          CHECKOK(ok, I->shaderCGO);
-          if (ok) I->shaderCGO->use_shader = true;
-          generate_shader_cgo = 1;
-          if (dash_transparency_enabled) {
-            CGOAlpha(I->shaderCGO, 1.f - dash_transparency);
-          }
-          ok &= RepAngleCGOGenerate(I, info);
-        } else {
-          CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
-          return;
+    if (!use_shader && I->shaderCGO) {
+      CGOFree(I->shaderCGO);
+      I->shaderCGO = 0;
+    }
+    if (use_shader) {
+      if (!I->shaderCGO) {
+        I->shaderCGO = CGONew(G);
+        CHECKOK(ok, I->shaderCGO);
+        if (ok) I->shaderCGO->use_shader = true;
+        if (dash_transparency_enabled) {
+          CGOAlpha(I->shaderCGO, 1.f - dash_transparency);
         }
+        ok &= RepDashLinesCGOGenerate(I, info);
       }
-
-      if (generate_shader_cgo) {
+      if (ok) {
         CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
       }
     }
   }
   if (!ok) {
     CGOFree(I->shaderCGO);
-    I->ds->Rep[cRepAngle] = nullptr;
+    I->ds->Rep[type()] = nullptr;
     delete I;
   }
 }

@@ -20,6 +20,49 @@ final class PlaybackState: ObservableObject {
 
 enum MeasureKind: String { case distance, angle, dihedral }
 
+/// A Python expression that evaluates to `s`, for interpolating any string
+/// (names, paths, selection text, JSON) into Python code: base64 can neither
+/// break the literal nor inject code, whatever quotes the string contains.
+func pyLiteral(_ s: String) -> String {
+  "__import__('base64').b64decode('\(Data(s.utf8).base64EncodedString())').decode()"
+}
+
+/// Leading-edge throttle with a trailing catch-up, for input that arrives every
+/// frame (a drag, a hover sweep): `run` fires at once when `interval` has passed
+/// since the last fire, otherwise once when it has — so the final position
+/// always lands. Main thread only.
+final class Throttle {
+  let interval: TimeInterval
+  private var lastFire = Date.distantPast
+  private var pending: DispatchWorkItem?
+
+  init(_ interval: TimeInterval) { self.interval = interval }
+
+  func run(_ body: @escaping () -> Void) {
+    pending?.cancel()
+    let fire = { [weak self] in
+      self?.lastFire = Date()
+      body()
+    }
+    let elapsed = Date().timeIntervalSince(lastFire)
+    if elapsed >= interval {
+      fire()
+    } else {
+      let work = DispatchWorkItem(block: fire)
+      pending = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + (interval - elapsed), execute: work)
+    }
+  }
+
+  /// Drop a pending trailing call; `resetClock` also lets the next `run` fire
+  /// on the leading edge.
+  func cancel(resetClock: Bool = false) {
+    pending?.cancel()
+    pending = nil
+    if resetClock { lastFire = .distantPast }
+  }
+}
+
 /// One PyMOL setting for the Settings panel. type: 1 bool, 2 int, 3 float,
 /// 4 float3, 5 color, 6 string (pymol.setting type codes).
 struct SettingItem: Identifiable, Equatable, Codable {
@@ -69,13 +112,9 @@ final class PyMOLEngine: ObservableObject {
   static let shared = PyMOLEngine()
 
   let console = ConsoleLog()
-  var feedbackLog: [String] {
-    get { console.lines }
-    set { console.lines = newValue }
-  }
   /// Last SEQCOLOR fingerprint (see fetchSequenceSelection).
   private var lastSequenceColorDigest: String?
-  @Published var objects: [MoleculeObject] = []
+  @Published var objects: [ObjectEntry] = []
   // Fires once per object-panel poll, whether or not anything changed. The guarded
   // @Published lists above emit only on change.
   let panelPolled = PassthroughSubject<Void, Never>()
@@ -197,11 +236,6 @@ final class PyMOLEngine: ObservableObject {
   // copy into a brand-new object. Same shape as pendingGroupFor — ObjectPanel
   // presents the name-entry alert, prefilled with PyMOL's own objNN default.
   @Published var pendingCopyToNew: String? = nil
-  // Pick-debug instrumentation (active when PYMOL_PICKDEBUG is set): the last
-  // click point in viewport (top-down, SwiftUI) points, drawn as a crosshair so
-  // a screenshot shows click-vs-selection alignment. Set by MetalViewport.
-  static let debugPickEnabled = ProcessInfo.processInfo.environment["PYMOL_PICKDEBUG"] != nil
-  @Published var debugClickPoint: CGPoint? = nil
   // Interactive measurement: nil = off; otherwise taps pick atoms for a
   // distance/angle/dihedral. measureStatus is the prompt/result shown in the UI.
   @Published var measureMode: MeasureKind? = nil
@@ -226,7 +260,7 @@ final class PyMOLEngine: ObservableObject {
   // @Published so the overlay toggle reflects Shift; callers must only assign it
   // on an actual change (it's polled on every hover move) to avoid re-render spam.
   @Published var moveShiftHeld = false { didSet { syncAdjustFrame() } }
-  private var lastAdjustSent = false
+  var lastAdjustSent = false
   var adjustFrameActive: Bool { interactionMode == .move && (adjustFrameToggle || moveShiftHeld) }
   // macOS hover highlight — pushes the hovered handle to metal_move so the CGO
   // gizmo emphasizes it. Rebuilds are infrequent (only when the handle changes).
@@ -381,8 +415,8 @@ final class PyMOLEngine: ObservableObject {
   // currentFrame (classic two-way-binding fight). Set on drag start, cleared
   // shortly after release so the next poll can re-sync.
   var isScrubbing: Bool = false
-  private var scrubReleaseWork: DispatchWorkItem?
-  private var lastScrubFrame: Int = -1
+  var scrubReleaseWork: DispatchWorkItem?
+  var lastScrubFrame: Int = -1
 
   // The opaque PyMOL instance pointer
   private(set) var instance: PyMOLHandle?
@@ -395,6 +429,27 @@ final class PyMOLEngine: ObservableObject {
   private var pendingHeavyClearFrames = 0
   // Backstop that hides a stuck bar if the render loop ever stalls.
   private var busyBackstop: DispatchWorkItem?
+
+  // Stored state of the features in the PyMOLEngine+*.swift extensions.
+  @Published var playingObjects: Set<String> = []
+  @Published var objectFPS: [String: Double] = [:]
+  var objectStateTimers: [String: Timer] = [:]
+  // Throttle for the live commit, as for hoverPreview: a drag produces a new
+  // rectangle every frame, and each commit projects EVERY drawn atom, so an
+  // unthrottled drag would queue Python faster than it can run.
+  let boxThrottle = Throttle(0.045)  // <= ~22 commits/s
+  // Whether a box session is open (box_begin has run, so the pre-box snapshot
+  // exists). Tracked so leaving the mode only pays for the teardown round-trip
+  // when there is something to tear down — setInteractionMode runs on every
+  // Move/Measure toggle too.
+  var boxSessionActive = false
+  // Throttle for the hover re-pick so a fast mouse sweep collapses to ≤~22
+  // picks/s. Plus a last-NDC gate so a barely-moved pointer doesn't re-pick at
+  // all — the actual projection over all atoms is the cost we're throttling.
+  let hoverThrottle = Throttle(0.045)
+  var lastHoverNDC: (Float, Float)? = nil
+  let kHoverMinNDC: Float = 0.004  // sub-pixel move gate (NDC²-ish)
+  @Published var classicRayImage: ClassicRayImage? = nil
 
   private init() {
   }
@@ -569,9 +624,10 @@ final class PyMOLEngine: ObservableObject {
     }
   }
 
-  // Synchronous command body. Safe on the main thread (light commands) or on
-  // coreQueue (heavy commands): it calls only direct bridge/runPython helpers,
-  // never runCommand, so it can't re-enter the heavy-dispatch path.
+  // Synchronous command body, always on the main thread (runHeavy defers heavy
+  // commands with DispatchQueue.main.async): it calls only direct
+  // bridge/runPython helpers, never runCommand, so it can't re-enter the
+  // heavy-dispatch path.
   private func runCommandCore(_ command: String) {
     PyMOLBridge_RunCommand(command)
     noteShownReps(command)
@@ -737,10 +793,9 @@ final class PyMOLEngine: ObservableObject {
   }
 
   // Called once per completed Metal frame (from MetalViewport.draw, main
-  // thread). Hides the build's progress bar after the frame that built the
-  // rep. `presented` is false when the frame rendered but no drawable was
-  // available, so nothing reached the screen.
-  func heavyRenderTick(presented: Bool = true) {
+  // thread), or skipped as clean. Hides the build's progress bar after the
+  // frame that built the rep.
+  func heavyRenderTick() {
     guard pendingHeavyClearFrames > 0 else { return }
     pendingHeavyClearFrames -= 1
     if pendingHeavyClearFrames == 0 {
@@ -837,7 +892,7 @@ final class PyMOLEngine: ObservableObject {
 
   func finishStartupLog() {
     startupQuiet = false
-    feedbackLog =
+    console.lines =
       AppBuildInfo.logo + ["", AppBuildInfo.consoleBanner]
       + (startupErrors
         ? ["  Note: ~/.pymolrc reported errors at startup (run @~/.pymolrc to see them)."] : [])
@@ -845,7 +900,7 @@ final class PyMOLEngine: ObservableObject {
 
   // Append a line to the console log from the main thread.
   func logLine(_ line: String) {
-    feedbackLog.append(line)
+    console.lines.append(line)
   }
 
   // Handle a `MOVIEEXPORT:<json>` request emitted by cmd.movie_export.
@@ -968,7 +1023,7 @@ final class PyMOLEngine: ObservableObject {
         "import pickle, os\n"
           + "from pymol import cmd as _sc\n"
           + "try:\n"
-          + "    _d = pickle.load(open(os.path.expanduser(r'''\(path)'''), 'rb'))\n"
+          + "    _d = pickle.load(open(os.path.expanduser(\(pyLiteral(path))), 'rb'))\n"
           + "    _m = _d.get('main')\n"
           + "    if _m and _m[0] and _m[1]: print('SESSIONVP:%d,%d' % (int(_m[0]), int(_m[1])))\n"
           + "    _v = _d.get('view')\n"
@@ -1074,15 +1129,14 @@ final class PyMOLEngine: ObservableObject {
 
   /// Write the whole session to `url` (a .pse) via cmd.save (the only path to the
   /// C++ saver is runPython — there's no Swift cmd.save wrapper) and track it as
-  /// the open document so a subsequent ⌘S overwrites it with no panel. Raw triple
-  /// quotes tolerate spaces/quotes in the path.
+  /// the open document so a subsequent ⌘S overwrites it with no panel.
   /// NOTE: writes a plain URL — works for the Developer-ID build and for any
   /// Save-As-chosen URL (auto write-granted). A sandboxed/MAS build that silently
   /// overwrites a Finder-opened file would additionally need a security-scoped
   /// bookmark resolved here.
   /// TODO: security-scoped bookmark for sandboxed overwrite.
   func saveSession(to url: URL) {
-    runPython("from pymol import cmd as _c\n_c.save(r'''\(url.path)''')")
+    runPython("from pymol import cmd as _c\n_c.save(\(pyLiteral(url.path)))")
     currentSessionURL = url
   }
 
@@ -1177,444 +1231,15 @@ final class PyMOLEngine: ObservableObject {
     for (k, v) in defaults { runCommand("set \(k), \(v)") }
   }
 
-  // MARK: - Timeline / playback controls
-  //
-  // All routed through runPython (raw PyRun, no log echo) so high-rate scrub
-  // calls don't flood the feedback log. Play/pause uses cmd.mplay/mstop and
-  // lets the core's SceneIdle advance frames (the Metal draw loop ticks idle()
-  // every frame); we never run a Swift frame-advance timer, which would race
-  // the core and double-advance.
-
-  private func movieCmd(_ call: String) {
-    runPython("from pymol import cmd as _m\n_m.\(call)")
-  }
-
-  func play() {
-    movieCmd("mplay()")
-    playback.isPlaying = true
-  }
-  func pause() {
-    movieCmd("mstop()")
-    playback.isPlaying = false
-  }
-  func togglePlay() { playback.isPlaying ? pause() : play() }
-
-  // These set the movie frame while paused; force one repaint so the viewport
-  // leaves the on-demand gate and shows the new frame (issue #132) — mirrors
-  // the per-object `set state` case in runCommandCore.
-  func rewindMovie() {
-    movieCmd("rewind()")
-    requestViewportRedraw()
-  }
-  func endingMovie() {
-    movieCmd("ending()")
-    requestViewportRedraw()
-  }
-  func stepForward() {
-    movieCmd("forward()")
-    requestViewportRedraw()
-  }
-  func stepBackward() {
-    movieCmd("backward()")
-    requestViewportRedraw()
-  }
-
-  // MARK: - Per-object model (state) playback — NMR/MD inspection, independent
-  // of the movie. Each object animates its OWN coordinate state at its OWN fps
-  // via a Swift timer (`set state, k, obj`), so ensembles can play at different
-  // rates without touching the global movie frame. The state-row slider follows
-  // via the object poll.
-  @Published var playingObjects: Set<String> = []
-  @Published var objectFPS: [String: Double] = [:]
-  private var objectStateTimers: [String: Timer] = [:]
-
-  func objectPlaybackFPS(_ name: String) -> Double { objectFPS[name] ?? 15 }
-
-  func setObjectFPS(_ name: String, _ fps: Double) {
-    objectFPS[name] = fps
-    if playingObjects.contains(name) { startObjectStates(name) }  // re-time
-  }
-
-  func toggleObjectStates(_ name: String) {
-    playingObjects.contains(name) ? stopObjectStates(name) : startObjectStates(name)
-  }
-
-  func startObjectStates(_ name: String) {
-    stopObjectStates(name)
-    guard let total = objects.first(where: { $0.name == name })?.stateCount, total > 1 else {
-      return
-    }
-    let fps = objectPlaybackFPS(name)
-    var k = min(max(objectMeta[name]?.state ?? 1, 1), total)
-    playingObjects.insert(name)
-    let t = Timer(timeInterval: 1.0 / max(fps, 0.1), repeats: true) { [weak self] _ in
-      guard let self else { return }
-      k = k >= total ? 1 : k + 1
-      self.runCommand("set state, \(k), \(name)", naming: name)  // #531
-    }
-    RunLoop.main.add(t, forMode: .common)  // keeps ticking during scroll/interaction
-    objectStateTimers[name] = t
-  }
-
-  func stopObjectStates(_ name: String) {
-    objectStateTimers[name]?.invalidate()
-    objectStateTimers[name] = nil
-    playingObjects.remove(name)
-  }
-
-  // Live scrub: clamp, set immediately for snappy UI, throttle the core call.
-  func scrub(to frame: Int) {
-    let f = max(1, min(frame, max(playback.frameCount, 1)))
-    isScrubbing = true
-    playback.currentFrame = f
-    scrubReleaseWork?.cancel()
-    guard f != lastScrubFrame else { return }
-    lastScrubFrame = f
-    movieCmd("frame(\(f))")
-    // Paused-scrub redraw: without an active mplay the on-demand gate can
-    // swallow the frame change once a movie exists, so nudge one repaint
-    // (issue #132). Harmless while playing (already redrawing every tick).
-    requestViewportRedraw()
-  }
-
-  // Drag ended: commit the final frame and release the scrub lock after a
-  // beat so the ~poll can resume mirroring core state without yanking.
-  func endScrub() {
-    let work = DispatchWorkItem { [weak self] in
-      self?.isScrubbing = false
-      self?.lastScrubFrame = -1
-    }
-    scrubReleaseWork = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
-  }
-
-  func setMovieFPS(_ fps: Double) {
-    let f = max(0.1, fps)
-    playback.movieFPS = f
-    movieCmd("set('movie_fps', \(f))")
-  }
-
-  func setMovieLoop(_ on: Bool) {
-    playback.movieLoop = on
-    movieCmd("set('movie_loop', \(on ? 1 : 0))")
-  }
-
-  func setShowFrameRate(_ on: Bool) {
-    movieCmd("set('show_frame_rate', \(on ? 1 : 0))")
-  }
-
-  // Recall a saved scene (camera + reps + visibility). Injection-safe (base64).
-  func recallScene(_ name: String) {
-    guard !name.isEmpty else { return }
-    let b64 = Data(name.utf8).base64EncodedString()
-    runPython(
-      "import base64 as _b64\nfrom pymol import cmd as _c\n"
-        + "_c.scene(_b64.b64decode('\(b64)').decode('utf-8'), 'recall')")
-  }
-
-  // Per-scene management for the scene chips' long-press menu. Injection-safe.
-  // updateScene overwrites the named scene with the CURRENT view/reps.
-  func updateScene(_ name: String) { sceneAction(name, "update") }
-  func deleteScene(_ name: String) { sceneAction(name, "delete") }
-
-  private func sceneAction(_ name: String, _ action: String) {
-    guard !name.isEmpty else { return }
-    let b64 = Data(name.utf8).base64EncodedString()
-    runPython(
-      "import base64 as _b64\nfrom pymol import cmd as _c\n"
-        + "_c.scene(_b64.b64decode('\(b64)').decode('utf-8'), '\(action)')")
-  }
-
-  func renameScene(_ name: String, to newName: String) {
-    let n = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !name.isEmpty, !n.isEmpty, n != name else { return }
-    let b = Data(name.utf8).base64EncodedString()
-    let nb = Data(n.utf8).base64EncodedString()
-    runPython(
-      "import base64 as _b64\nfrom pymol import cmd as _c\n"
-        + "_c.scene(_b64.b64decode('\(b)').decode('utf-8'), 'rename', "
-        + "new_key=_b64.b64decode('\(nb)').decode('utf-8'))")
-  }
-
-  // Move the playhead to `frame` and commit (for tapping a keyframe/ruler in
-  // the timeline). Wraps the scrub + release pair used by the transport.
-  func seek(to frame: Int) {
-    scrub(to: frame)
-    endScrub()
-  }
-
-  // MARK: - Timeline drag-and-drop (re-time keyframes, place/move scenes)
-
-  // MARK: - Unified timeline track ops
-  //
-  // The docked TimelinePanel's single lane. Every mutation ends in
-  // rebuildMovie(), which recomputes frames from the transition durations and
-  // rebuilds the entire core movie from `timelineItems` (Swift is the source
-  // of truth). Camera views live in appkit_movie._views, keyed by item UUID.
-
-  // Cumulative 1-based frame of each item, derived from the transition
-  // durations: item[0] sits at frame 1 (its inbound transition is ignored);
-  // each later item is `transition.seconds` (× fps) past the previous, forced
-  // strictly increasing so mview keyframes never collide. [] when empty.
-  // Each item's (startFrame, endFrame). Camera/scene are zero-width points
-  // (end == start); a states clip occupies its own span (end = start + its
-  // duration × fps), so later items begin after it.
-  func itemSpans() -> [(start: Int, end: Int)] {
-    guard !timelineItems.isEmpty else { return [] }
-    let fps = max(playback.movieFPS, 1)
-    var out = [(start: Int, end: Int)](repeating: (1, 1), count: timelineItems.count)
-    var acc = 0.0
-    var lastSeqEnd = 0
-    var seenSeq = false
-    for (i, it) in timelineItems.enumerated() {
-      // Positioned items (a camera dropped at the playhead) sit at their
-      // absolute frame and don't participate in the sequential layout.
-      if let af = it.atFrame {
-        out[i] = (max(1, af), max(1, af))
-        continue
-      }
-      let start: Int
-      if !seenSeq {
-        start = 1
-        seenSeq = true
-      } else {
-        acc += max(it.transition.seconds, 0.1)
-        start = max(lastSeqEnd + 1, 1 + Int((acc * fps).rounded()))
-      }
-      var end = start
-      if case .states(let spec) = it.kind {
-        end = start + max(1, Int((spec.durationSeconds * fps).rounded()))
-      }
-      out[i] = (start, end)
-      lastSeqEnd = end
-    }
-    return out
-  }
-
-  func itemFrames() -> [Int] { itemSpans().map { $0.start } }
-
-  var timelineTotalFrames: Int { itemSpans().map { $0.end }.max() ?? 1 }
-
-  // Rebuild the whole core movie from `timelineItems`. Serializes an ordered
-  // spec (camera → UUID into _views; scene → base64 name) with each item's
-  // inbound-transition easing, base64-wrapped so scene names / JSON can't break
-  // the Python literal. Mirrors playback.frameCount immediately (the ~10/s poll
-  // would otherwise lag the ruler a beat).
-  func rebuildMovie() {
-    guard isReady else { return }
-    if timelineItems.isEmpty {
-      // "[]" → clears the movie (see appkit_movie.rebuild).
-      runPython("from mmol import movie as _am\n_am.rebuild('W10=')")
-      playback.frameCount = 1
-      playback.currentFrame = 1
-      return
-    }
-    let spans = itemSpans()
-    var parts: [String] = []
-    for (i, it) in timelineItems.enumerated() {
-      let (start, end) = spans[i]
-      let ease =
-        it.transition.linear
-        ? "\"power\":1.0,\"linear\":1"
-        : "\"power\":0.0,\"linear\":0"
-      switch it.kind {
-      case .camera:
-        var s = "{\"frame\":\(start),\"cam\":\"\(it.id.uuidString)\",\(ease)"
-        if let ps = it.pinnedState { s += ",\"state\":\(ps)" }
-        parts.append(s + "}")
-      case .scene(let name):
-        let b64 = Data(name.utf8).base64EncodedString()
-        var s = "{\"frame\":\(start),\"scene\":\"\(b64)\",\(ease)"
-        if let ps = it.pinnedState { s += ",\"state\":\(ps)" }
-        parts.append(s + "}")
-      case .states(let spec):
-        let objs =
-          spec.objects.map {
-            "[" + $0.map { "\"\($0)\"" }.joined(separator: ",") + "]"
-          } ?? "null"
-        parts.append(
-          "{\"frame\":\(start),\"end\":\(end),\"states\":1,"
-            + "\"objects\":\(objs),\"mode\":\"\(spec.mode.rawValue)\","
-            + "\"first\":\(spec.firstModel),\"last\":\(spec.lastModel)}")
-      }
-    }
-    let json = "[" + parts.joined(separator: ",") + "]"
-    let jb64 = Data(json.utf8).base64EncodedString()
-    runPython(
-      "import base64 as _b64\nfrom mmol import movie as _am\n"
-        + "_am.rebuild(_b64.b64decode('\(jb64)').decode('utf-8'))")
-    playback.frameCount = timelineTotalFrames
-    playback.currentFrame = 1
-  }
-
-  // Multi-state objects currently loaded (name, state count), and the max — used
-  // by the timeline to represent a bare ensemble and to target "Play models".
-  func multiStateObjects() -> [(name: String, count: Int)] {
-    objects.filter { $0.stateCount > 1 }.map { ($0.name, $0.stateCount) }
-  }
-  var maxStateCount: Int { objects.map { $0.stateCount }.max() ?? 1 }
-
-  // Append a "Play models" states clip (sweeps a model range over `seconds`).
-  func appendStatesClip(
-    objects: [String]? = nil, mode: StatesMode = .sweep,
-    firstModel: Int = 1, lastModel: Int = 0, seconds: Double = 4.0
-  ) {
-    guard isReady else { return }
-    let spec = StatesSpec(
-      objects: objects, mode: mode,
-      firstModel: firstModel, lastModel: lastModel, durationSeconds: seconds)
-    timelineItems.append(TimelineItem(kind: .states(spec)))
-    rebuildMovie()
-  }
-
-  // Re-position a frame-anchored camera item (dragged along the lane).
-  func setItemAtFrame(_ id: UUID, _ frame: Int) {
-    guard let i = timelineItems.firstIndex(where: { $0.id == id }),
-      timelineItems[i].atFrame != nil
-    else { return }
-    timelineItems[i].atFrame = max(1, frame)
-    rebuildMovie()
-  }
-
-  // True when the lane has a "Play models" clip (camera keyframes then anchor to
-  // the playhead so they can be placed within the clip's span).
-  var hasStatesClip: Bool {
-    timelineItems.contains { if case .states = $0.kind { return true } else { return false } }
-  }
-
-  // Update a states clip's spec (mode / duration / objects) in place.
-  func updateStatesClip(_ id: UUID, _ spec: StatesSpec) {
-    guard let i = timelineItems.firstIndex(where: { $0.id == id }) else { return }
-    timelineItems[i].kind = .states(spec)
-    rebuildMovie()
-  }
-
-  // Append a camera keyframe of the CURRENT view to the end of the lane.
-  func captureCameraItem() {
-    guard isReady else { return }
-    // With a "Play models" clip present, anchor the keyframe at the current
-    // playhead so it can be dropped WITHIN the clip's span (camera moves while
-    // the models cycle). Otherwise append sequentially as before.
-    let at = hasStatesClip ? max(1, playback.currentFrame) : nil
-    let item = TimelineItem(kind: .camera, atFrame: at)
-    runPython("from mmol import movie as _am\n_am.capture_view('\(item.id.uuidString)')")
-    timelineItems.append(item)
-    rebuildMovie()
-    seekToItem(item.id)
-  }
-
-  // Append a scene marker (from the palette) to the end of the lane. The
-  // camera flies into the scene and its reps cut in at playback.
-  func appendSceneItem(_ name: String) {
-    guard isReady, !name.isEmpty else { return }
-    let item = TimelineItem(kind: .scene(name: name))
-    timelineItems.append(item)
-    rebuildMovie()
-    seekToItem(item.id)
-  }
-
-  // Reorder: move the item at `from` to final index `to` (drag past a
-  // neighbor). Ripples all frames + one rebuild.
-  func moveItem(from: Int, to: Int) {
-    guard timelineItems.indices.contains(from) else { return }
-    let clamped = min(max(to, 0), timelineItems.count - 1)
-    guard from != clamped else { return }
-    let it = timelineItems.remove(at: from)
-    timelineItems.insert(it, at: clamped)
-    rebuildMovie()
-  }
-
-  func deleteItem(_ id: UUID) {
-    guard let idx = timelineItems.firstIndex(where: { $0.id == id }) else { return }
-    let it = timelineItems.remove(at: idx)
-    if case .camera = it.kind {
-      runPython("from mmol import movie as _am\n_am.forget_view('\(id.uuidString)')")
-    }
-    rebuildMovie()
-  }
-
-  // Edit the transition INTO `id` (duration + easing) — the long-press config.
-  func setTransition(_ id: UUID, seconds: Double, linear: Bool) {
-    guard let idx = timelineItems.firstIndex(where: { $0.id == id }) else { return }
-    timelineItems[idx].transition = Transition(seconds: seconds, linear: linear)
-    rebuildMovie()
-  }
-
-  func frameForItem(_ id: UUID) -> Int? {
-    guard let idx = timelineItems.firstIndex(where: { $0.id == id }) else { return nil }
-    let frames = itemFrames()
-    return frames.indices.contains(idx) ? frames[idx] : nil
-  }
-
-  func seekToItem(_ id: UUID) {
-    if let f = frameForItem(id) { seek(to: f) }
-  }
-
-  // Append a camera Roll/Rock as a run of 4 camera items joined by equal
-  // transitions that sum to `duration`. Python computes the waypoint views
-  // (spin/rock around the current view) under Swift-generated UUIDs.
-  func appendCameraTemplate(kind: String, duration: Double, axis: String, angle: Double) {
-    guard isReady else { return }
-    let count = 4
-    let ids = (0..<count).map { _ in UUID() }
-    let idsJSON = "[" + ids.map { "\"\($0.uuidString)\"" }.joined(separator: ",") + "]"
-    let idsB64 = Data(idsJSON.utf8).base64EncodedString()
-    runPython(
-      "import base64 as _b64\nfrom mmol import movie as _am\n"
-        + "_am.capture_template_views(_b64.b64decode('\(idsB64)').decode('utf-8'), "
-        + "'\(kind)', axis='\(axis)', angle=\(angle))")
-    let per = max(duration / Double(count - 1), 0.2)  // 3 gaps span the duration
-    // A roll is one continuous spin: easing each 120° gap would slow the camera
-    // to a near-stop at every waypoint (a 6x speed pulse). Rock keeps the ease,
-    // since its waypoints are where the motion reverses.
-    let linear = kind == "roll"
-    for id in ids {
-      timelineItems.append(
-        TimelineItem(
-          id: id, kind: .camera,
-          transition: Transition(seconds: per, linear: linear)))
-    }
-    rebuildMovie()
-  }
-
-  // Append a scene marker per saved scene, each `secondsPerScene` apart.
-  func appendScenesTemplate(secondsPerScene: Double, scenes: [String]? = nil) {
-    guard isReady else { return }
-    let names = scenes ?? sceneNames
-    guard !names.isEmpty else { return }
-    for nm in names {
-      timelineItems.append(
-        TimelineItem(
-          kind: .scene(name: nm),
-          transition: Transition(seconds: secondsPerScene, linear: false)))
-    }
-    rebuildMovie()
-  }
-
-  // Empty the unified lane and clear the core movie + stored views.
-  func clearMovieItems() {
-    guard isReady else { return }
-    timelineItems.removeAll()
-    runPython("from mmol import movie as _am\n_am.forget_all_views()\n_am.reset_movie()")
-    playback.frameCount = 1
-    playback.currentFrame = 1
-  }
-
   // MARK: - Selection builder support
 
   // Preview how many atoms a selection expression would match, without
   // creating a lasting selection. Emits SELPREVIEW:<n> (or :err). The caller
   // debounces. Uses a throwaway '_pv' selection.
   func previewSelection(_ expr: String) {
-    // Pass the expression as base64 and decode in Python, so a selection
-    // string containing quotes / ''' / backslashes can neither break the
-    // literal nor inject code (the old strip-backslashes + r'''…''' was both
-    // lossy and injectable via an embedded ''').
-    let b64 = Data(expr.utf8).base64EncodedString()
     runPython(
-      "import base64 as _b64\n"
-        + "from pymol import cmd as _c\n"
-        + "_e = _b64.b64decode('\(b64)').decode('utf-8')\n"
+      "from pymol import cmd as _c\n"
+        + "_e = \(pyLiteral(expr))\n"
         + "try:\n"
         + "    _n = _c.select('_pv', _e)\n"
         + "    print('SELPREVIEW:%d' % int(_n))\n"
@@ -1625,26 +1250,18 @@ final class PyMOLEngine: ObservableObject {
 
   // Create/overwrite a named selection and enable it.
   func createSelection(name: String, expr: String) {
-    // base64 the name + expression (see previewSelection): injection-safe.
-    let nb = Data(name.utf8).base64EncodedString()
-    let eb = Data(expr.utf8).base64EncodedString()
     runPython(
-      "import base64 as _b64\nfrom pymol import cmd as _c\n"
-        + "_c.select(_b64.b64decode('\(nb)').decode('utf-8'), "
-        + "_b64.b64decode('\(eb)').decode('utf-8'), enable=1)")
+      "from pymol import cmd as _c\n"
+        + "_c.select(\(pyLiteral(name)), \(pyLiteral(expr)), enable=1)")
   }
 
   // Rename an object/selection.
   func renameObject(_ old: String, to newName: String) {
     guard !newName.isEmpty else { return }
-    // base64 both names (see previewSelection): injection-safe. The C core
-    // sanitizes the decoded name via ObjectMakeValidName.
-    let ob = Data(old.utf8).base64EncodedString()
-    let nb = Data(newName.utf8).base64EncodedString()
+    // The C core sanitizes the new name via ObjectMakeValidName.
     runPython(
-      "import base64 as _b64\nfrom pymol import cmd as _c\n"
-        + "_c.set_name(_b64.b64decode('\(ob)').decode('utf-8'), "
-        + "_b64.b64decode('\(nb)').decode('utf-8'))")
+      "from pymol import cmd as _c\n"
+        + "_c.set_name(\(pyLiteral(old)), \(pyLiteral(newName)))")
   }
 
   // MARK: - Interactive measurement
@@ -1680,7 +1297,7 @@ final class PyMOLEngine: ObservableObject {
 
   /// Leave whichever exclusive interaction mode is active, each through that
   /// mode's OWN existing exit path — so the Esc key (see
-  /// ContentView.installEscKeyMonitor) and the overlays' ✕ buttons converge on
+  /// ContentView.installKeyMonitor) and the overlays' ✕ buttons converge on
   /// identical behavior; Esc must never grow a second, divergent path. (#235)
   ///
   /// The modes are mutually exclusive, so in practice at most one branch runs. They
@@ -1711,230 +1328,6 @@ final class PyMOLEngine: ObservableObject {
     return exited
   }
 
-  // MARK: - Box Select (rubber-band selection, #358)
-
-  // Leading-edge throttle for the live commit, mirroring hoverPreview: a drag
-  // produces a new rectangle every frame, and each commit projects EVERY drawn
-  // atom, so an unthrottled drag would queue Python faster than it can run.
-  private var boxWork: DispatchWorkItem?
-  private var lastBoxFire = Date.distantPast
-  private let kBoxCommitInterval = 0.045  // <= ~22 commits/s
-  // Whether a box session is open (box_begin has run, so the pre-box snapshot
-  // exists). Tracked so leaving the mode only pays for the teardown round-trip
-  // when there is something to tear down — setInteractionMode runs on every
-  // Move/Measure toggle too.
-  private var boxSessionActive = false
-
-  /// Enter / leave Box Select (Tools ▸ Box Select).
-  func toggleBoxSelect() {
-    setInteractionMode(interactionMode == .boxSelect ? .viewing : .boxSelect)
-  }
-
-  /// Begin a new box: snapshot the selection so that every re-commit of THIS
-  /// box composes against what was there before it, not against its own
-  /// previous commit. Called when a drag starts a fresh rectangle, not when
-  /// one adjusts the existing one.
-  func beginBoxSession() {
-    boxSessionActive = true
-    runPython("from mmol import pick as _mp\n_mp.box_begin('sele')")
-  }
-
-  /// Update the rectangle and commit it. There is no preview/accept split: the
-  /// committed selection IS the feedback, which is what makes the tool usable
-  /// without hunting for a confirm button.
-  func setBoxRect(_ rect: BoxRect?) {
-    boxRect = rect
-    guard let rect = rect, !rect.isDegenerate else { return }
-    commitBoxRect(rect)
-  }
-
-  private func commitBoxRect(_ rect: BoxRect) {
-    let aspect = gizmoAspect
-    boxWork?.cancel()
-    let fire: () -> Void = { [weak self] in
-      guard let self = self else { return }
-      self.lastBoxFire = Date()
-      // mode='add': the tool only ever grows the selection it opened on.
-      self.runPython(
-        "from mmol import pick as _mp\n"
-          + "_mp.box_commit_ndc(\(rect.minX), \(rect.minY), \(rect.maxX), \(rect.maxY), "
-          + "\(aspect), name='sele', mode='add')")
-    }
-    let elapsed = Date().timeIntervalSince(lastBoxFire)
-    if elapsed >= kBoxCommitInterval {
-      fire()  // leading edge — track the drag
-    } else {
-      let work = DispatchWorkItem(block: fire)  // trailing — final rest position
-      boxWork = work
-      DispatchQueue.main.asyncAfter(
-        deadline: .now() + (kBoxCommitInterval - elapsed), execute: work)
-    }
-  }
-
-  /// Forget the rectangle and close the session. The last commit STAYS — the
-  /// tool has no cancel, because with commit-on-drag there is no uncommitted
-  /// state left to throw away.
-  private func clearBoxState() {
-    boxWork?.cancel()
-    boxWork = nil
-    boxDrag = nil
-    boxRect = nil
-    // Reset the throttle clock too, so the FIRST rectangle of the next box
-    // always commits on the leading edge instead of waiting out a window
-    // left over from the previous one.
-    lastBoxFire = .distantPast
-    guard boxSessionActive else { return }
-    boxSessionActive = false
-    runPython("from mmol import pick as _mp\n_mp.box_finish()")
-  }
-
-  /// Leave the tool. The selection the box made is already committed.
-  func endBoxSelection() {
-    setInteractionMode(.viewing)
-  }
-
-  // MARK: - Move mode (rigid-body object gizmo)
-
-  /// Viewport aspect (width / height) for the gizmo projection. Falls back to
-  /// 1.0 before the first reshape.
-  var gizmoAspect: Float {
-    let s = viewportPixelSize
-    return s.height > 0 ? Float(s.width / s.height) : 1.0
-  }
-
-  func setInteractionMode(_ mode: InteractionMode) {
-    interactionMode = mode
-    // Leaving Box Select (for viewing OR for another tool) must drop the
-    // rectangle and its preview highlight, or the cyan atoms stay lit with no
-    // box on screen to explain them.
-    if mode != .boxSelect { clearBoxState() }
-    // The viewport tools (Move, Box Select) are exclusive with the other
-    // modes; .viewing is not a tool and leaves them alone (Esc unwinds them
-    // via their own setters).
-    if mode == .move || mode == .boxSelect {
-      if measureMode != nil { setMeasureMode(nil) }  // mutually exclusive
-    }
-    if mode == .boxSelect {
-      // The box freezes hover picking (MetalViewport.handleMouseMoved), so
-      // nothing will refresh or clear the hover highlight while it is up —
-      // drop it now rather than leave whatever the pointer happened to be
-      // over when the tool was switched on lit up.
-      clearHoverPreview()
-      // Open with a rectangle already down and already committed. The tool
-      // has no other affordance now that the overlay bar is gone, so an
-      // empty viewport would just look like nothing happened.
-      beginBoxSession()
-      setBoxRect(.initial)
-    }
-    if mode == .move {
-      refreshGizmo()
-    } else {
-      hoveredHandle = nil
-      activeMoveObject = nil
-      gizmo = nil
-      // Clear lastAdjustSent FIRST. adjustFrameToggle and moveShiftHeld
-      // both carry `didSet { syncAdjustFrame() }`, and syncAdjustFrame
-      // calls readGizmo(), which re-reads the gizmo temp file — still
-      // "active" here, because cleanup() below hasn't run yet. That
-      // resurrects the gizmo and activeMoveObject just cleared above.
-      // Zeroing lastAdjustSent first makes syncAdjustFrame's
-      // `want != lastAdjustSent` guard early-return. The skipped
-      // set_adjust(0) round-trip is redundant: cleanup() tears the whole
-      // gizmo down a few lines later.
-      lastAdjustSent = false
-      adjustFrameToggle = false
-      moveShiftHeld = false
-      runPython("from mmol import move as _mm\n_mm.cleanup()")
-    }
-  }
-
-  /// Push adjust-frame mode to metal_move when it changes (overlay toggle or the
-  /// Shift key). set_adjust rebuilds the gizmo (greys it / restores it).
-  func syncAdjustFrame() {
-    let want = adjustFrameActive
-    guard want != lastAdjustSent else { return }
-    lastAdjustSent = want
-    runPython("from mmol import move as _mm\n_mm.set_adjust(\(want ? 1 : 0))")
-    readGizmo()
-  }
-
-  /// Clear the active object's custom gizmo frame → snap back to the auto frame.
-  /// Distinct from resetActiveMovePosition (which resets the object's position).
-  func resetGizmoFrame() {
-    runPython("from mmol import move as _mm\n_mm.reset_gizmo()")
-    readGizmo()
-  }
-
-  /// Grab-what-you-touch: set the active object to whatever is under the point.
-  func moveSetActiveAt(ndcX: Float, ndcY: Float, aspect: Float) {
-    runPython("from mmol import move as _mm\n_mm.pick_object(\(ndcX), \(ndcY), \(aspect))")
-    readGizmo()
-  }
-
-  /// Explicitly set the active object (overlay dropdown).
-  func setActiveMoveObject(_ name: String) {
-    let nb = Data(name.utf8).base64EncodedString()
-    runPython(
-      "import base64 as _b64\nfrom mmol import move as _mm\n"
-        + "_mm.set_active(_b64.b64decode('\(nb)').decode('utf-8'), \(gizmoAspect))")
-    readGizmo()
-  }
-
-  /// Re-emit the gizmo geometry (after the camera changed).
-  func refreshGizmo(aspect: Float? = nil) {
-    guard interactionMode == .move else { return }
-    runPython("from mmol import move as _mm\n_mm.refresh(\(aspect ?? gizmoAspect))")
-    readGizmo()
-  }
-
-  func gizmoBeginDrag(_ handle: GizmoHandle, ndcX: Float, ndcY: Float, aspect: Float) {
-    runPython(
-      "from mmol import move as _mm\n_mm.begin_drag('\(handle.pyName)', \(ndcX), \(ndcY), \(aspect))"
-    )
-    readGizmo()
-  }
-
-  func gizmoUpdateDrag(ndcX: Float, ndcY: Float, aspect: Float) {
-    // Mid-drag: only issue the move. Skip readGizmo() — metal_move deliberately
-    // does NOT re-emit geometry per tick (the gizmo is a 3D CGO that tracks the
-    // molecule via its synced TTT, and hit-testing is idle while a handle is
-    // grabbed), so there is no file to read back. This keeps the drag as light
-    // as a vanilla-GL matrix update; the continuous draw loop repaints from
-    // PyMOL's redisplay flag. end_drag re-emits geometry for the next hit-test.
-    runPython("from mmol import move as _mm\n_mm.update_drag(\(ndcX), \(ndcY), \(aspect))")
-  }
-
-  func gizmoEndDrag() {
-    runPython("from mmol import move as _mm\n_mm.end_drag()")
-    readGizmo()
-  }
-
-  func resetActiveMovePosition() {
-    runPython("from mmol import move as _mm\n_mm.reset_active()")
-    readGizmo()
-  }
-
-  // Read the gizmo geometry metal_move wrote to the temp dir (same-process
-  // TMPDIR), synchronously — called right after each metal_move call (the
-  // longPressPick pattern). Updates the published gizmo + active object.
-  private func readGizmo() {
-    let path = TempChannel.path(TempChannel.Stem.gizmo)
-    guard let data = FileManager.default.contents(atPath: path),
-      let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else { return }
-    if (root["active"] as? Bool) == true, let g = GizmoGeometry(json: root) {
-      // Only republish when the projected geometry actually changed. This is
-      // called on every hover step (to keep the hit-test current against any
-      // view change), so a static view must not fire objectWillChange each
-      // move — that would churn every view observing the engine.
-      if gizmo != g { gizmo = g }
-      if activeMoveObject != g.obj { activeMoveObject = g.obj }
-    } else {
-      if gizmo != nil { gizmo = nil }
-      if activeMoveObject != nil { activeMoveObject = nil }
-    }
-  }
-
   // MARK: - Settings panel
 
   func loadSettingsCatalog() {
@@ -1942,13 +1335,9 @@ final class PyMOLEngine: ObservableObject {
   }
 
   func setSetting(_ name: String, _ value: String) {
-    // base64 the name + value (see previewSelection): injection-safe.
-    let nb = Data(name.utf8).base64EncodedString()
-    let vb = Data(value.utf8).base64EncodedString()
     runPython(
-      "import base64 as _b64\nfrom mmol import settings as _as\n"
-        + "_as.set_value(_b64.b64decode('\(nb)').decode('utf-8'), "
-        + "_b64.b64decode('\(vb)').decode('utf-8'))")
+      "from mmol import settings as _as\n"
+        + "_as.set_value(\(pyLiteral(name)), \(pyLiteral(value)))")
   }
 
   // Read the settings catalog JSON the bridge wrote to the temp dir.
@@ -2039,103 +1428,6 @@ final class PyMOLEngine: ObservableObject {
   /// removed by a script changes it, and the strip refetches.
   private var sequenceColorPython: String {
     "from pymol import cmd as _sc\nprint('SEQCOLOR:%d' % _sc._cmd.color_fingerprint(_sc._COb))\n"
-  }
-
-  // Tap-to-select via metal_pick (NDC in [-1,1], aspect = width/height).
-  func pick(ndcX: Float, ndcY: Float, aspect: Float) {
-    #if DEBUG
-      if let viewportInputTap {
-        viewportInputTap(.pick(ndcX: ndcX, ndcY: ndcY))
-        return
-      }
-    #endif
-    guard let inst = instance else { return }
-    PyMOLBridge_Pick(inst, ndcX, ndcY, aspect)
-  }
-
-  /// Middle click: center the view (and rotation origin) on the atom at (ndcX, ndcY).
-  func centerAt(ndcX: Float, ndcY: Float, aspect: Float) {
-    runPython("from mmol import pick as _mp\n_mp.center_at(\(ndcX), \(ndcY), \(aspect))")
-  }
-
-  // MARK: - Hover pre-selection preview (issue #165)
-
-  // Trailing coalescer for the hover re-pick so a fast mouse sweep collapses to
-  // ~one pick every ~33 ms (mirrors MetalViewport.armPanEndDebounce). Plus a
-  // last-NDC gate so a barely-moved pointer doesn't re-pick at all — the actual
-  // projection over all atoms is the cost we're throttling.
-  private var hoverWork: DispatchWorkItem?
-  private var lastHoverNDC: (Float, Float)? = nil
-  private var lastHoverFire = Date.distantPast
-  private let kHoverInterval = 0.045  // leading-edge throttle: ≤~22 picks/s
-  private let kHoverMinNDC: Float = 0.004  // sub-pixel move gate (NDC²-ish)
-
-  /// Update the hover pre-selection preview to what a click at (ndcX,ndcY)
-  /// would select, without committing to 'sele'. No-op while the feature is
-  /// disabled. LEADING-EDGE throttled (+ trailing catch-up) so the preview
-  /// tracks CONTINUOUSLY while the pointer sweeps — a pure trailing debounce
-  /// only fired once the pointer paused, which read as "hover doesn't work".
-  func hoverPreview(_ ndcX: Float, _ ndcY: Float, _ aspect: Float) {
-    guard isReady, hoverPreviewEnabled else { return }
-    if let last = lastHoverNDC {
-      let dx = ndcX - last.0
-      let dy = ndcY - last.1
-      if abs(dx) < kHoverMinNDC && abs(dy) < kHoverMinNDC { return }
-    }
-    lastHoverNDC = (ndcX, ndcY)
-    hoverWork?.cancel()
-    let fire: () -> Void = { [weak self] in
-      guard let self = self else { return }
-      // A trailing pick scheduled before `ray` must not run over the held
-      // ray image (desktop PyMOL has no hover pick).
-      if self.rayImageHeld { return }
-      self.lastHoverFire = Date()
-      self.runPython(
-        "from mmol import pick as _mp; "
-          + "_mp.hover_preview_at(\(ndcX), \(ndcY), \(aspect))")
-    }
-    let elapsed = Date().timeIntervalSince(lastHoverFire)
-    if elapsed >= kHoverInterval {
-      fire()  // leading edge — update now
-    } else {
-      let work = DispatchWorkItem(block: fire)  // trailing — final rest position
-      hoverWork = work
-      DispatchQueue.main.asyncAfter(
-        deadline: .now() + (kHoverInterval - elapsed), execute: work)
-    }
-  }
-
-  /// Cancel any pending hover pick and empty the preview selection. Cheap and
-  /// idempotent — safe to call from mouse-down / drag-start / mouse-exit and
-  /// when the user toggles the feature off.
-  func clearHoverPreview() {
-    hoverWork?.cancel()
-    hoverWork = nil
-    lastHoverNDC = nil
-    guard isReady else { return }
-    runPython("from mmol import pick as _mp; _mp.clear_preview()")
-  }
-
-  /// Right-click: identify the atom/residue under the click (read-only — does
-  /// NOT change the selection) and publish it so ContentView can show the
-  /// context menu. pick_info_at writes the hit JSON to the temp dir, which we
-  /// read back synchronously (this runs on the main thread from the event).
-  func longPressPick(ndcX: Float, ndcY: Float, aspect: Float) {
-    guard isReady else { return }
-    runPython("from mmol import pick as _mp; _mp.pick_info_at(\(ndcX), \(ndcY), \(aspect))")
-    let path = (NSTemporaryDirectory() as NSString).appendingPathComponent("pymol_longpress.json")
-    guard let data = FileManager.default.contents(atPath: path),
-      let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else { return }
-    let hit = (root["hit"] as? Bool) ?? false
-    longPressHit = LongPressHit(
-      isEmpty: !hit,
-      obj: root["obj"] as? String ?? "",
-      chain: root["chain"] as? String ?? "",
-      resi: root["resi"] as? String ?? "",
-      resn: root["resn"] as? String ?? "",
-      name: root["name"] as? String ?? "",
-      sel: root["sel"] as? String ?? "")
   }
 
   // MARK: - Render loop hooks (called by MetalViewport)
@@ -2283,65 +1575,6 @@ final class PyMOLEngine: ObservableObject {
     return Int(PyMOLBridge_MetalFramesInFlight(inst))
   }
 
-  // MARK: - Ray image
-
-  /// The image the last `ray` produced (mmol/classic_ray.py), shown over the
-  /// viewport until the core drops it.
-  struct ClassicRayImage: Equatable {
-    let image: NSImage
-    let pixelWidth: Int
-    let pixelHeight: Int
-    let background: RGBA
-  }
-  @Published var classicRayImage: ClassicRayImage? = nil
-
-  /// RAYIMG:<w>:<h>:<r>,<g>,<b>:<png path>
-  private func parseClassicRayImage(_ line: String) {
-    let parts = line.split(separator: ":", maxSplits: 4, omittingEmptySubsequences: false)
-    guard parts.count == 5, let w = Int(parts[1]), let h = Int(parts[2]) else { return }
-    let rgb = parts[3].split(separator: ",").compactMap { Double($0) }
-    let path = String(parts[4])
-    guard rgb.count == 3, let img = NSImage(contentsOfFile: path) else { return }
-    try? FileManager.default.removeItem(atPath: path)
-    classicRayImage = ClassicRayImage(
-      image: img, pixelWidth: w, pixelHeight: h,
-      background: RGBA(rgb[0], rgb[1], rgb[2]))
-  }
-
-  /// True while a ray image is up — including the moment between the core
-  /// getting it and the next feedback poll showing it (a fast `rayg`), when
-  /// a hover pick would otherwise make the core drop it unseen.
-  var rayImageHeld: Bool {
-    if classicRayImage != nil { return true }
-    guard let inst = instance else { return false }
-    return PyMOLBridge_HasSceneImage(inst) != 0
-  }
-
-  /// A click in the viewport dismisses the ray image (desktop PyMOL); merely
-  /// moving the pointer must not, so hover previews are suspended while one is up.
-  func dismissClassicRay() {
-    guard classicRayImage != nil, let inst = instance else { return }
-    PyMOLBridge_DropSceneImage(inst)
-    classicRayImage = nil
-  }
-
-  /// Write the held ray image (what the viewport shows) to `path` — the
-  /// export a desktop PyMOL user expects after `ray`. False if none is held.
-  @discardableResult
-  func saveHeldRayImage(to path: String) -> Bool {
-    guard classicRayImage != nil else { return false }
-    try? FileManager.default.removeItem(atPath: path)
-    let quoted = path.replacingOccurrences(of: "\\", with: "\\\\")
-      .replacingOccurrences(of: "'", with: "\\'")
-    runPython("from pymol import cmd as _c\n_c.png('\(quoted)', prior=1, quiet=1)\n")
-    return FileManager.default.fileExists(atPath: path)
-  }
-
-  /// Route `ray` to the desktop-PyMOL display path (mmol/classic_ray.py).
-  func enableClassicRay() {
-    runPythonQuiet("from mmol import classic_ray\nclassic_ray.enable(True)\n")
-  }
-
   // MARK: - MCP view requests (mmol.mcp/tools.py)
 
   /// HEATMAP:<b64 json> → attach + configure a CSV heatmap (as C ▸ by file…);
@@ -2410,80 +1643,91 @@ final class PyMOLEngine: ObservableObject {
               }
               return
             }
-            self.feedbackLog.append(contentsOf: printed)
+            self.console.lines.append(contentsOf: printed)
           }
         }
       }
-      // Check for ObjectPanel feedback before appending to log
+      // Marker lines go to their handler, swallowed ones nowhere; the rest
+      // is console output.
       for line in text.components(separatedBy: "\n") {
-        if line.hasPrefix("OBJPANEL:") {
-          parseObjectPanelFeedback(line)
-        } else if line.hasPrefix("OBJDETAIL:") {
-          parseObjectDetailFeedback(line)
-        } else if line.hasPrefix("SESSIONVP:") {
-          let parts = line.dropFirst("SESSIONVP:".count).split(separator: ",")
-          if parts.count == 2, let w = Double(parts[0]), let h = Double(parts[1]), h > 0 {
-            let aspect = Float(w / h)
-            DispatchQueue.main.async { self.setLetterboxAspect(aspect) }
-          }
-        } else if line.hasPrefix("SEQPANEL:") {
-          parseSequencePanelFeedback(line)
-        } else if line.hasPrefix("SEQSEL:") {
-          parseSequenceSelectionFeedback(line)
-        } else if line.hasPrefix("PLAYBACK:") {
-          parsePlaybackFeedback(line)
-        } else if line.hasPrefix("PLAYBACK_ERR:") {
-          // swallow (don't flood the log with poll errors)
-        } else if line.hasPrefix("MOVIEEXPORT:") {
-          // cmd.movie_export (#581): a scripted export request.
-          let json = String(line.dropFirst("MOVIEEXPORT:".count))
-          DispatchQueue.main.async { self.startScriptedMovieExport(json) }
-        } else if line.hasPrefix("SELPREVIEW:") {
-          let v = String(line.dropFirst("SELPREVIEW:".count))
-          let count = Int(v)
-          DispatchQueue.main.async { self.selectionPreviewCount = count }
-        } else if line.hasPrefix("MEASURE:") {
-          parseMeasureFeedback(line)
-        } else if line.hasPrefix("MEASURE_ERR:") {
-          // swallow
-        } else if line.hasPrefix("SETTINGS:ready") {
-          loadSettingsCatalogFile()
-        } else if line.hasPrefix("SETTINGS:err") {
-          // swallow
-        } else if line.hasPrefix("SETVAL:") {
-          parseSetValFeedback(line)
-        } else if line.hasPrefix("SEQCOLOR:") {
-          let digest = String(line.dropFirst("SEQCOLOR:".count))
-          if digest != lastSequenceColorDigest {
-            let first = lastSequenceColorDigest == nil
-            lastSequenceColorDigest = digest
-            if !first && sequenceVisible { fetchSequences() }
-          }
-        } else if line.hasPrefix("HEATMAP:") || line.hasPrefix("CONTACTMAP:") {
-          // Requests from the MCP tools color_by_csv / contact_map.
-          handleMCPViewRequest(line)
-        } else if line.hasPrefix("RENDEROPTS:") {
-          parseRenderOptions(line)
-        } else if line.hasPrefix("RAYIMG:") {
-          parseClassicRayImage(line)
-        } else if line.hasPrefix("MCP:") {
-          let body = String(line.dropFirst("MCP:".count))
-          if let colon = body.firstIndex(of: ":") {
-            let kind = String(body[..<colon])
-            let b64 = String(body[body.index(after: colon)...])
-            let detail =
-              Data(base64Encoded: b64)
-              .flatMap { String(data: $0, encoding: .utf8) } ?? ""
-            DispatchQueue.main.async {
-              MCPServerManager.shared.handleFeedbackEvent(kind, detail)
-            }
-          }
-        } else if !line.isEmpty {
+        if let route = Self.feedbackHandlers.first(where: { line.hasPrefix($0.prefix) }) {
+          route.handle(self, line)
+        } else if !line.isEmpty
+          && !Self.ignoredFeedbackPrefixes.contains(where: { line.hasPrefix($0) })
+        {
           printed.append(line)
         }
       }
     }
   }
+
+  /// Poll errors that must not flood the log.
+  static let ignoredFeedbackPrefixes = ["PLAYBACK_ERR:", "MEASURE_ERR:", "SETTINGS:err"]
+
+  /// Marker-line prefix → handler, for pollFeedback. No prefix is a prefix of
+  /// another (FeedbackRoutingTests), so the order does not matter.
+  static let feedbackHandlers: [(prefix: String, handle: (PyMOLEngine, String) -> Void)] = [
+    ("OBJPANEL:", { $0.parseObjectPanelFeedback($1) }),
+    ("OBJDETAIL:", { $0.parseObjectDetailFeedback($1) }),
+    (
+      "SESSIONVP:",
+      { e, line in
+        let parts = line.dropFirst("SESSIONVP:".count).split(separator: ",")
+        if parts.count == 2, let w = Double(parts[0]), let h = Double(parts[1]), h > 0 {
+          let aspect = Float(w / h)
+          DispatchQueue.main.async { e.setLetterboxAspect(aspect) }
+        }
+      }
+    ),
+    ("SEQPANEL:", { $0.parseSequencePanelFeedback($1) }),
+    ("SEQSEL:", { $0.parseSequenceSelectionFeedback($1) }),
+    ("PLAYBACK:", { $0.parsePlaybackFeedback($1) }),
+    // cmd.movie_export (#581): a scripted export request.
+    (
+      "MOVIEEXPORT:",
+      { e, line in
+        let json = String(line.dropFirst("MOVIEEXPORT:".count))
+        DispatchQueue.main.async { e.startScriptedMovieExport(json) }
+      }
+    ),
+    (
+      "SELPREVIEW:",
+      { e, line in
+        let count = Int(line.dropFirst("SELPREVIEW:".count))
+        DispatchQueue.main.async { e.selectionPreviewCount = count }
+      }
+    ),
+    ("MEASURE:", { $0.parseMeasureFeedback($1) }),
+    ("SETTINGS:ready", { e, _ in e.loadSettingsCatalogFile() }),
+    ("SETVAL:", { $0.parseSetValFeedback($1) }),
+    (
+      "SEQCOLOR:",
+      { e, line in
+        let digest = String(line.dropFirst("SEQCOLOR:".count))
+        if digest != e.lastSequenceColorDigest {
+          let first = e.lastSequenceColorDigest == nil
+          e.lastSequenceColorDigest = digest
+          if !first && e.sequenceVisible { e.fetchSequences() }
+        }
+      }
+    ),
+    // Requests from the MCP tools color_by_csv / contact_map.
+    ("HEATMAP:", { $0.handleMCPViewRequest($1) }),
+    ("CONTACTMAP:", { $0.handleMCPViewRequest($1) }),
+    ("RENDEROPTS:", { $0.parseRenderOptions($1) }),
+    ("RAYIMG:", { $0.parseClassicRayImage($1) }),
+    (
+      "MCP:",
+      { _, line in
+        let body = String(line.dropFirst("MCP:".count))
+        guard let colon = body.firstIndex(of: ":") else { return }
+        let kind = String(body[..<colon])
+        let b64 = String(body[body.index(after: colon)...])
+        let detail = Data(base64Encoded: b64).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        DispatchQueue.main.async { MCPServerManager.shared.handleFeedbackEvent(kind, detail) }
+      }
+    ),
+  ]
 
   // Run MCP tool work queued from the in-process server's HTTP request threads
   // on THIS (main) thread — the only thread where touching the embedded core is
@@ -2562,16 +1806,49 @@ final class PyMOLEngine: ObservableObject {
       "from mmol import inspector as _ai\n_ai.poll([\(pyList)], extent=\(extent))")
   }
 
-  /// One object's `objmeta` entry -> ObjStateMeta.
-  ///
-  /// Static so a test can exercise it without an engine. The DEFAULTS are
-  /// the point: they match each setting's own, so a payload from a build that
-  /// predates a key reads as "not set" rather than as a value the user chose.
-  static func parseObjMeta(_ m: [String: Any]) -> ObjStateMeta {
-    ObjStateMeta(
-      state: (m["state"] as? NSNumber)?.intValue ?? 1,
-      overlayAll: ((m["all"] as? NSNumber)?.intValue ?? 0) != 0,
-      titles: (m["titles"] as? [Any])?.map { $0 as? String ?? "" } ?? [])
+  /// Decoded shape of the tempfile written by `mmol.inspector.poll`. Fields
+  /// are optional so a payload from a build that predates a key decodes to
+  /// the defaults applied in parseObjectDetailFeedback.
+  struct ObjectDetailPayload: Decodable {
+    struct Rep: Decodable {
+      let rep: String?
+      let vis: Int?
+      let vals: [String: Double]?
+      let color: String?
+      let eff: String?
+      let colors: [String: String]?
+      let atom_transp: AtomTranspEntry?
+    }
+    struct AtomTranspEntry: Decodable {
+      let setting: String
+      let min: Double?
+      let max: Double?
+    }
+    /// One object's `objmeta` entry. The defaults match each setting's own,
+    /// so a missing key reads as "not set" rather than as a user's choice.
+    struct Meta: Decodable {
+      let state: Int?
+      let all: Int?
+      let titles: [String]?
+    }
+    /// A scene value: a number, or outline_rgb's [r, g, b].
+    enum SceneValue: Decodable {
+      case number(Double)
+      case list([Double])
+      init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let v = try? c.decode(Double.self) {
+          self = .number(v)
+        } else {
+          self = .list(try c.decode([Double].self))
+        }
+      }
+    }
+    let detail: [String: [Rep]]?
+    let scene: [String: SceneValue]?
+    let objmeta: [String: Meta]?
+    let scenes: [String]?
+    let cur_scene: String?
   }
 
   // Parse the inspector JSON (written by appkit_inspector.poll to a temp file;
@@ -2581,67 +1858,40 @@ final class PyMOLEngine: ObservableObject {
   func parseObjectDetailFeedback(_ line: String) {
     let path = TempChannel.path(TempChannel.Stem.objectDetail)
     guard let data = FileManager.default.contents(atPath: path),
-      let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+      let root = try? JSONDecoder().decode(ObjectDetailPayload.self, from: data)
     else { return }
 
-    var details: [String: [RepState]] = [:]
-    if let detail = root["detail"] as? [String: Any] {
-      for (obj, repsAny) in detail {
-        guard let reps = repsAny as? [[String: Any]] else { continue }
-        details[obj] = reps.map { r in
-          var values: [String: Double] = [:]
-          if let vals = r["vals"] as? [String: Any] {
-            for (k, v) in vals { values[k] = (v as? NSNumber)?.doubleValue ?? 0 }
-          }
-          var settingColors: [String: String] = [:]
-          if let cols = r["colors"] as? [String: Any] {
-            for (k, v) in cols { settingColors[k] = v as? String ?? "inherit" }
-          }
-          var atomTransp: AtomTransp? = nil
-          if let at = r["atom_transp"] as? [String: Any],
-            let setting = at["setting"] as? String
-          {
-            atomTransp = AtomTransp(
-              setting: setting,
-              min: (at["min"] as? NSNumber)?.doubleValue ?? 0,
-              max: (at["max"] as? NSNumber)?.doubleValue ?? 0)
-          }
-          return RepState(
-            rep: r["rep"] as? String ?? "",
-            visible: ((r["vis"] as? NSNumber)?.intValue ?? 1) != 0,
-            values: values,
-            color: r["color"] as? String ?? "inherit",
-            effColor: r["eff"] as? String,
-            settingColors: settingColors,
-            atomTransp: atomTransp)
-        }
+    let details = (root.detail ?? [:]).mapValues { reps in
+      reps.map { r in
+        RepState(
+          rep: r.rep ?? "",
+          visible: (r.vis ?? 1) != 0,
+          values: r.vals ?? [:],
+          color: r.color ?? "inherit",
+          effColor: r.eff,
+          settingColors: r.colors ?? [:],
+          atomTransp: r.atom_transp.map {
+            AtomTransp(setting: $0.setting, min: $0.min ?? 0, max: $0.max ?? 0)
+          })
       }
     }
 
     var scene = SceneState()
-    if let sc = root["scene"] as? [String: Any] {
-      for (k, v) in sc {
-        if k == "outline_rgb", let arr = v as? [Any] {
-          scene.outlineColor = arr.map { ($0 as? NSNumber)?.doubleValue ?? 0 }
-        } else {
-          scene.values[k] = (v as? NSNumber)?.doubleValue ?? 0
-        }
+    for (k, v) in root.scene ?? [:] {
+      switch v {
+      case .number(let n): scene.values[k] = n
+      case .list(let rgb): scene.outlineColor = rgb
       }
     }
 
-    var meta: [String: ObjStateMeta] = [:]
-    if let om = root["objmeta"] as? [String: Any] {
-      for (obj, mAny) in om {
-        guard let m = mAny as? [String: Any] else { continue }
-        meta[obj] = PyMOLEngine.parseObjMeta(m)
-      }
+    let meta = (root.objmeta ?? [:]).mapValues {
+      ObjStateMeta(state: $0.state ?? 1, overlayAll: ($0.all ?? 0) != 0, titles: $0.titles ?? [])
     }
 
     // Sessions saved by earlier builds carry hidden note bookmarks as
     // scenes; keep them out of the Scene menu and the timeline composer.
-    let scenes = ((root["scenes"] as? [String]) ?? [])
-      .filter { !$0.hasPrefix("__mmol_note_") }
-    let curScene = (root["cur_scene"] as? String) ?? ""
+    let scenes = (root.scenes ?? []).filter { !$0.hasPrefix("__mmol_note_") }
+    let curScene = root.cur_scene ?? ""
 
     DispatchQueue.main.async {
       // Equality-guard: the ~500ms poll re-emits identical detail most of
@@ -2699,8 +1949,3 @@ final class PyMOLEngine: ObservableObject {
   }
 
 }
-
-// MARK: - Data models
-// ObjectEntry is the canonical model, defined in ObjectPanel.swift.
-// MoleculeObject is a typealias for backward compatibility.
-typealias MoleculeObject = ObjectEntry

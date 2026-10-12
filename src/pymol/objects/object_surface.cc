@@ -42,6 +42,7 @@ Z* -------------------------------------------------------------------
 #include "pymol/base/pymol_globals.h"
 #include "pymol/geometry/matrix.h"
 #include "pymol/graphics/shader_mgr.h"
+#include "pymol/objects/object_iso_internal.h"
 #include "pymol/graphics/cgo.h"
 #include "pymol/base/feedback.h"
 
@@ -52,23 +53,7 @@ static PyObject* ObjectSurfaceStateAsPyList(ObjectSurfaceState* I) {
 
   result = PyList_New(17);
 
-  PyList_SetItem(result, 0, PyInt_FromLong(I->Active));
-  PyList_SetItem(result, 1, PyString_FromString(I->MapName));
-  PyList_SetItem(result, 2, PyInt_FromLong(I->MapState));
-  PyList_SetItem(result, 3, CrystalAsPyList(&I->Crystal));
-  PyList_SetItem(result, 4, PyInt_FromLong(I->ExtentFlag));
-  PyList_SetItem(result, 5, PConvFloatArrayToPyList(I->ExtentMin, 3));
-  PyList_SetItem(result, 6, PConvFloatArrayToPyList(I->ExtentMax, 3));
-  PyList_SetItem(result, 7, PConvIntArrayToPyList(I->Range, 6));
-  PyList_SetItem(result, 8, PyFloat_FromDouble(I->Level));
-  PyList_SetItem(result, 9, PyFloat_FromDouble(I->Radius));
-  PyList_SetItem(result, 10, PyInt_FromLong(I->CarveFlag));
-  PyList_SetItem(result, 11, PyFloat_FromDouble(I->CarveBuffer));
-  if (I->CarveFlag && I->AtomVertex) {
-    PyList_SetItem(result, 12, PConvFloatVLAToPyList(I->AtomVertex));
-  } else {
-    PyList_SetItem(result, 12, PConvAutoNone(nullptr));
-  }
+  ObjectIsoStateHeadAsPyList(I, result);
   PyList_SetItem(result, 13, PyInt_FromLong(I->DotFlag));
   PyList_SetItem(result, 14, PyInt_FromLong(static_cast<int>(I->Mode)));
   PyList_SetItem(result, 15, PyInt_FromLong(static_cast<int>(I->Side)));
@@ -93,7 +78,6 @@ static int ObjectSurfaceStateFromPyList(PyMOLGlobals* G, ObjectSurfaceState* I,
                                         PyObject* list) {
   int ok = true;
   int ll = 0;
-  PyObject* tmp;
   if (ok) ok = (list != nullptr);
   if (ok) {
     if (!PyList_Check(list))
@@ -102,32 +86,7 @@ static int ObjectSurfaceStateFromPyList(PyMOLGlobals* G, ObjectSurfaceState* I,
       *I = ObjectSurfaceState(G);
       if (ok) ok = PyList_Check(list);
       if (ok) ll = PyList_Size(list);
-      if (ok) ok = PConvPyIntToInt(PyList_GetItem(list, 0), &I->Active);
-      if (ok)
-        ok = PConvPyStrToStr(PyList_GetItem(list, 1), I->MapName, WordLength);
-      if (ok) ok = PConvPyIntToInt(PyList_GetItem(list, 2), &I->MapState);
-      if (ok) ok = CrystalFromPyList(&I->Crystal, PyList_GetItem(list, 3));
-      if (ok) ok = PConvPyIntToInt(PyList_GetItem(list, 4), &I->ExtentFlag);
-      if (ok)
-        ok = PConvPyListToFloatArrayInPlace(PyList_GetItem(list, 5),
-                                            I->ExtentMin, 3);
-      if (ok)
-        ok = PConvPyListToFloatArrayInPlace(PyList_GetItem(list, 6),
-                                            I->ExtentMax, 3);
-      if (ok)
-        ok = PConvPyListToIntArrayInPlace(PyList_GetItem(list, 7), I->Range, 6);
-      if (ok) ok = PConvPyFloatToFloat(PyList_GetItem(list, 8), &I->Level);
-      if (ok) ok = PConvPyFloatToFloat(PyList_GetItem(list, 9), &I->Radius);
-      if (ok) ok = PConvPyIntToInt(PyList_GetItem(list, 10), &I->CarveFlag);
-      if (ok)
-        ok = PConvPyFloatToFloat(PyList_GetItem(list, 11), &I->CarveBuffer);
-      if (ok) {
-        tmp = PyList_GetItem(list, 12);
-        if (tmp == Py_None)
-          I->AtomVertex = nullptr;
-        else
-          ok = PConvPyListToFloatVLA(tmp, &I->AtomVertex);
-      }
+      if (ok) ok = ObjectIsoStateHeadFromPyList(I, list);
       if (ok) ok = PConvPyIntToInt(PyList_GetItem(list, 13), &I->DotFlag);
 
       if (ok) PConvFromPyListItem(G, list, 14, I->Mode);

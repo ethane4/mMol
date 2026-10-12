@@ -19,7 +19,7 @@ if True:
     cmd = __import__("sys").modules["pymol.cmd"]
     from .cmd import _cmd, DEFAULT_ERROR, DEFAULT_SUCCESS
 
-    import pickle as cPickle
+    import pickle
 
     class WizardError(Exception):
         pass
@@ -175,7 +175,7 @@ if True:
     def session_save_wizard(session, _self=cmd):
         # double-pickle so that session file is class-independent
         stack = _self.get_wizard_stack()
-        session['wizard'] = cPickle.dumps(stack, 1)
+        session['wizard'] = pickle.dumps(stack, 1)
         return 1
 
     def session_restore_wizard(session, _self=cmd):

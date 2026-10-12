@@ -138,9 +138,6 @@ float TextGetSpacing(PyMOLGlobals* G);
 float TextGetJustification(PyMOLGlobals* G);
 float* TextGetLabelBuffer(PyMOLGlobals* G);
 
-void TextSetIsPicking(PyMOLGlobals* G, bool IsPicking);
-bool TextGetIsPicking(PyMOLGlobals* G);
-
 bool TextStartsWithColorCode(const char*);
 bool TextSetColorFromCode(PyMOLGlobals*, const char*, const float*);
 

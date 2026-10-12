@@ -35,8 +35,6 @@
 
 #include "pymol/objects/property.h"
 
-#define _PYMOL_MAE_PROP_EXPORT
-
 /**
  * Get the capitalized element symbol. Assume that ai->elem is either all
  * caps (e.g. loaded from PDB) or capitalized.
@@ -1080,9 +1078,6 @@ struct MoleculeExporterMAE : public MoleculeExporter {
   bool m_has_anisou;
   bool m_has_pbc = false;
 
-#ifdef _PYMOL_MAE_PROP_EXPORT
-#endif
-
   /** Check if current object has any ANISOU data
    */
   bool currentObjectHasAnisou() const {
@@ -1173,9 +1168,6 @@ struct MoleculeExporterMAE : public MoleculeExporter {
            "r_pdb_PDB_CRYST1_gamma", "s_pdb_PDB_CRYST1_Space_Group"});
     }
 
-#ifdef _PYMOL_MAE_PROP_EXPORT
-#endif
-
     writeMaeKeys(keys);
 
     m_offset += VLAprintf(m_buffer, m_offset, ":::\n");
@@ -1200,9 +1192,6 @@ struct MoleculeExporterMAE : public MoleculeExporter {
                     dim[1], dim[2], angle[0], angle[1], angle[2],
                     MaeExportStrRepr(sym->spaceGroup()).c_str());
     }
-
-#ifdef _PYMOL_MAE_PROP_EXPORT
-#endif
 
     // defer until number of atoms known
     m_n_atoms_offset = m_offset;
@@ -1252,9 +1241,6 @@ struct MoleculeExporterMAE : public MoleculeExporter {
     m_offset += VLAprintf(m_buffer, m_offset,
                           "m_atom[X]            {\n"  // place holder
                           "# First column is atom index #\n");
-
-#ifdef _PYMOL_MAE_PROP_EXPORT
-#endif
 
     writeMaeKeys(keys);
 
@@ -1337,9 +1323,6 @@ struct MoleculeExporterMAE : public MoleculeExporter {
         m_offset += VLAprintf(m_buffer, m_offset, "<> <> <> <> <> <>\n");
       }
     }
-
-#ifdef _PYMOL_MAE_PROP_EXPORT
-#endif
 
     m_atoms[getTmpID()] = ai;
 

@@ -1,18 +1,12 @@
 cmd = __import__("sys").modules["pymol.cmd"]
 
-try:
-    basestring
-except NameError:
-    basestring = (str, bytes)
-
-
 def _raising(code=-1, _self=cmd):
     # WARNING: internal routine, subject to change
     return is_error(code)
 
 
 def is_string(obj):
-    return isinstance(obj, basestring)
+    return isinstance(obj, (str, bytes))
 
 
 def is_list(obj):

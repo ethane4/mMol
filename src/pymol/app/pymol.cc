@@ -111,7 +111,6 @@ struct CPyMOL {
   int Progress[PYMOL_PROGRESS_SIZE]{};
   int ProgressChanged{};
   int IdleAndReady{};
-  int ExpireCount{};
   bool done_ConfigureShaders{};
 
   PyMOLModalDrawFn* ModalDraw = nullptr;
@@ -756,9 +755,6 @@ void PyMOL_Stop(CPyMOL* I) {
   TetsurfFree(G);
   IsosurfFree(G);
   WizardFree(G);
-#ifdef SYM_TO_MAT_LIST_IN_C
-  SymmetryFree(G);
-#endif
   EditorFree(G);
   ExecutiveFree(G);
   VFontFree(G);
@@ -948,26 +944,6 @@ int PyMOL_Idle(CPyMOL* I) {
     if (PyMOL_GetInterrupt(I, false)) PyMOL_SetInterrupt(I, false);
 
   PYMOL_API_UNLOCK_NO_FLUSH return (did_work || I->ModalDraw);
-}
-
-void PyMOL_ExpireIfIdle(CPyMOL* I) {
-  PYMOL_API_LOCK PyMOLGlobals* G = I->G;
-  int final_init_done = true;
-  final_init_done = (I->PythonInitStage == -1);
-
-  if (!G->HaveGUI) {
-    if (final_init_done) {
-      if (!OrthoCommandWaiting(G)) {
-        if ((!G->Option->keep_thread_alive) && (!G->Option->read_stdin)) {
-          I->ExpireCount++;
-          if (I->ExpireCount == 10) {
-            PParse(G, "_quit");
-          }
-        }
-      }
-    }
-  }
-  PYMOL_API_UNLOCK;
 }
 
 void PyMOL_NeedFakeDrag(CPyMOL* I) { I->FakeDragFlag = true; }

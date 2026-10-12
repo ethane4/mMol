@@ -20,7 +20,7 @@ extension PyMOLEngine {
   func showRenderSample(_ on: Bool) {
     if on {
       let path = Bundle.main.path(forResource: "1ubq", ofType: "cif") ?? ""
-      runPython("from mmol import render_options as _ro\n_ro.begin(r'''\(path)''')")
+      runPython("from mmol import render_options as _ro\n_ro.begin(\(pyLiteral(path)))")
     } else {
       runPython("from mmol import render_options as _ro\n_ro.end()")
     }
@@ -34,7 +34,7 @@ extension PyMOLEngine {
     else { return }
     runPython(
       "from mmol import render_options as _ro\nimport json as _j\n"
-        + "_ro.set_option('\(name)', _j.loads('''\(json)''')[0])")
+        + "_ro.set_option('\(name)', _j.loads(\(pyLiteral(json)))[0])")
   }
 
   func resetRenderOptions() {

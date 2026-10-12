@@ -246,6 +246,24 @@ class RendererMetal : public Renderer {
                    int posOffset, int colorOffset, int colorType, bool flat);
   void buildLinePipeline();
 
+  // Shared by drawVBO and drawVBOIndexed (ibo nil for the non-indexed draw).
+  struct VBOUniforms {
+    float modelview[16];
+    float projection[16];
+    float pointSize;
+    float _pad[3];
+  };
+  id<MTLBuffer> cachedVBOBuffer(const void* data, size_t size);
+  // Picks and binds the pipeline for the vertex layout, then the depth state,
+  // vertex buffer, uniforms, lighting and per-rep clip. False skips the draw.
+  bool bindVBODraw(id<MTLBuffer> vbo, size_t stride, int posOffset, int normalOffset,
+                   int colorOffset, int colorType, bool unlit, VBOUniforms& u);
+  void encodeVBODraw(PrimitiveType mode, int count, id<MTLBuffer> ibo);
+  void drawVBOInteriorCap(PrimitiveType mode, int count, id<MTLBuffer> vbo, id<MTLBuffer> ibo,
+                          size_t stride, int posOffset, const VBOUniforms& u);
+  void recordVBOCoverage(id<MTLBuffer> vbo, id<MTLBuffer> ibo, int count, size_t stride,
+                         int posOffset);
+
   // Vertex attribute description
   struct VertexAttrib {
     int size = 0;  // component count (1-4)

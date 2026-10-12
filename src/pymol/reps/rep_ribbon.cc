@@ -123,11 +123,6 @@ static void RepRibbonRenderRaster(RepRibbon* I, RenderInfo* info) {
             info, I);
 }
 
-static void RepRibbonPick(RepRibbon* I, RenderInfo* info) {
-  CGORenderPicking(I->shaderCGO ? I->shaderCGO : I->primitiveCGO, info,
-                   &I->context, I->cs->Setting.get(), I->obj->Setting.get(), I);
-}
-
 static void RepRibbonRenderImmediate(RepRibbon* I, RenderInfo* info) {
   CGORender(I->primitiveCGO, nullptr, I->cs->Setting.get(),
             I->obj->Setting.get(), info, I);
@@ -136,17 +131,12 @@ static void RepRibbonRenderImmediate(RepRibbon* I, RenderInfo* info) {
 void RepRibbon::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
 
   if (ray) {
     RepRibbonRenderRay(I, info);
     return;
   }
   if (!(G->HaveGUI && G->ValidContext)) {
-    return;
-  }
-  if (pick) {
-    RepRibbonPick(I, info);
     return;
   }
 
@@ -578,8 +568,4 @@ Rep* RepRibbonNew(CoordSet* cs, int state) {
   FreeP(pv);
 
   return (Rep*)I;
-}
-
-void RepRibbonRenderImmediate(CoordSet* cs, RenderInfo* info) {
-  /* immediate mode rendering removed — use shader path instead */
 }

@@ -65,7 +65,7 @@ final class ConsoleLogTests: XCTestCase {
     XCTAssertEqual(ConsoleLogText.plan(previous: ["one"], current: ["one"]), .none)
   }
 
-  /// PyMOLEngine caps `feedbackLog` at 400 lines by dropping from the FRONT,
+  /// PyMOLEngine caps `console.lines` at 400 lines by dropping from the FRONT,
   /// so past the cap every new line both trims and appends. Treating that as a
   /// plain append would duplicate the surviving text; treating it as a full
   /// rebuild would drop the user's selection on every single line of output.
