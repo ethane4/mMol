@@ -320,13 +320,14 @@ struct SequencePanel: View {
   }
 
   private func dragEnd() {
+    engine.runPython("from pymol import cmd as _c\n_c.delete('_seqdrag0')\n")
+    // Settle in one update: read the real 'sele', then drop the drag state in
+    // the same pass. Clearing dragAdds a turn before dragSelKeys drew the
+    // swept residues of a deselecting drag as selected for a moment.
+    engine.syncSequenceSelectionNow()
     lastRange = nil
     dragAdds = nil
-    engine.runPython("from pymol import cmd as _c\n_c.delete('_seqdrag0')\n")
-    // Read the real 'sele' back at once, then drop the optimistic overlay
-    // on the next turn, after the confirmed keys have landed.
-    engine.syncSequenceSelectionNow()
-    DispatchQueue.main.async { self.dragSelKeys = [] }
+    dragSelKeys = []
   }
 
   // MARK: - Selection dispatch
@@ -529,22 +530,33 @@ extension PyMOLEngine {
   /// Re-read 'sele' for the strip right now: the Python runs synchronously,
   /// so its file is already written when it returns, and there is no need to
   /// wait for the next feedback poll (up to 100 ms) to pick up the marker.
+  /// Called from the main thread, it updates `selectedResidueKeys` before
+  /// returning, so a caller can change other view state in the same pass.
   func syncSequenceSelectionNow() {
     fetchSequenceSelection()
-    parseSequenceSelectionFeedback("SEQSEL:ready")
+    if Thread.isMainThread {
+      applySequenceSelection()
+    } else {
+      DispatchQueue.main.async { self.applySequenceSelection() }
+    }
   }
 
   func parseSequenceSelectionFeedback(_ line: String) {
     guard line.hasPrefix("SEQSEL:") else { return }
+    // Read on the main thread, when the update lands, so a slow hop can't
+    // apply an older read over a newer one.
+    DispatchQueue.main.async { self.applySequenceSelection() }
+  }
+
+  /// Sets `selectedResidueKeys` from the keys `mmol.sequence.poll_selection`
+  /// last wrote.
+  private func applySequenceSelection() {
     let path = TempChannel.path(TempChannel.Stem.sequenceSelection)
-    guard let data = FileManager.default.contents(atPath: path) else { return }
-    guard let keys = try? JSONDecoder().decode([String].self, from: data) else { return }
+    guard let data = FileManager.default.contents(atPath: path),
+      let keys = try? JSONDecoder().decode([String].self, from: data)
+    else { return }
     let set = Set(keys)
-    DispatchQueue.main.async {
-      if self.selectedResidueKeys != set {
-        self.selectedResidueKeys = set
-      }
-    }
+    if selectedResidueKeys != set { selectedResidueKeys = set }
   }
 }
 

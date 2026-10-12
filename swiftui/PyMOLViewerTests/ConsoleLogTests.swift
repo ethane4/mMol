@@ -210,6 +210,20 @@ final class ConsoleLogTests: XCTestCase {
       "the log must handle the selector Edit ▸ Copy sends")
   }
 
+  // MARK: - clear
+
+  /// `clear` (and `cls`) empty the log, and the console view follows with a
+  /// replace to no text rather than a partial edit.
+  func testClearEmptiesTheLogAndTheView() {
+    let log = ConsoleLog()
+    log.lines = ["mMol>fetch 1ubq", " ObjectMolecule: Read secondary structure."]
+    let before = log.lines
+    log.clear()
+    XCTAssertTrue(log.lines.isEmpty)
+    XCTAssertEqual(
+      ConsoleLogText.plan(previous: before, current: log.lines, dropped: 0), .replace(""))
+  }
+
   // MARK: - Helpers
 
   private func makeTextView() -> NSTextView {

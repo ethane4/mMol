@@ -12,6 +12,8 @@ import tempfile
 
 from pymol import cmd
 
+from mmol import undo
+
 SAMPLE = '_render_sample'
 
 # (group, setting, label, kind, extra): slider (min, max), menu [(value, label)],
@@ -161,7 +163,8 @@ def begin(path):
     global _saved
     if _saved is None:
         _saved = (cmd.get_names('objects', enabled_only=1), cmd.get_view())
-        cmd.disable('all')
+        with undo.suspended():  # temporary: end() shows them again
+            cmd.disable('all')
     if SAMPLE not in cmd.get_names('all'):
         cmd.load(path, SAMPLE)
         cmd.remove(SAMPLE + ' and solvent')
@@ -180,8 +183,9 @@ def end(close=False):
     if _saved is not None:
         _sample_view = cmd.get_view()
         cmd.disable(SAMPLE)
-        for o in _saved[0]:
-            cmd.enable(o)
+        with undo.suspended():
+            for o in _saved[0]:
+                cmd.enable(o)
         cmd.set_view(_saved[1])
         _saved = None
     if close:

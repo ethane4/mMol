@@ -289,4 +289,49 @@ final class PanelLayoutTests: XCTestCase {
   func testKeysAreUnique() {
     XCTAssertEqual(Set(PanelLayout.allKeys).count, PanelLayout.allKeys.count)
   }
+
+  // MARK: - the docked Claude terminal
+
+  /// A tall column gives the terminal its full height.
+  func testClaudePaneIsFullHeightWhenThereIsRoom() {
+    XCTAssertEqual(
+      PanelLayout.claudePaneHeight(stackHeight: 1000), PanelLayout.claudePaneDefaultHeight)
+  }
+
+  /// A shorter column shrinks the terminal so the viewport keeps its minimum
+  /// and the terminal's last rows (Claude Code's input line) stay on screen.
+  func testClaudePaneShrinksToFitTheColumn() {
+    let column: CGFloat = 600
+    let pane = PanelLayout.claudePaneHeight(stackHeight: column)
+    XCTAssertEqual(pane, column - PanelLayout.macViewportMinHeight)
+    XCTAssertLessThan(pane, PanelLayout.claudePaneDefaultHeight)
+  }
+
+  /// In a very short column the terminal keeps its floor but never outgrows
+  /// the column itself.
+  func testClaudePaneKeepsItsFloorButFitsTheColumn() {
+    XCTAssertEqual(
+      PanelLayout.claudePaneHeight(stackHeight: 400), PanelLayout.claudePaneMinHeight)
+    XCTAssertEqual(PanelLayout.claudePaneHeight(stackHeight: 100), 100)
+    XCTAssertEqual(
+      PanelLayout.claudePaneHeight(stackHeight: .nan), PanelLayout.claudePaneMinHeight)
+  }
+
+  /// A size the user dragged to wins over the default, even past it, as long
+  /// as the viewport keeps its floor.
+  func testDraggedClaudePaneHeightIsHonoured() {
+    XCTAssertEqual(PanelLayout.claudePaneHeight(stackHeight: 700, preferred: 450), 450)
+    XCTAssertEqual(PanelLayout.claudePaneHeight(stackHeight: 700, preferred: 200), 200)
+  }
+
+  /// A dragged size still leaves the viewport its floor, and keeps the
+  /// terminal's own minimum.
+  func testDraggedClaudePaneHeightIsClamped() {
+    XCTAssertEqual(
+      PanelLayout.claudePaneHeight(stackHeight: 600, preferred: 900),
+      600 - PanelLayout.claudeViewportFloor)
+    XCTAssertEqual(
+      PanelLayout.claudePaneHeight(stackHeight: 600, preferred: 20),
+      PanelLayout.claudePaneMinHeight)
+  }
 }
