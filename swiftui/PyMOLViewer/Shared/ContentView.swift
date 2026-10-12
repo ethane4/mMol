@@ -347,10 +347,17 @@ struct ContentView: View {
     close: (() -> Void)?
   ) -> some View {
     HStack(spacing: 5) {
-      Text(title)
-        .font(.system(size: 13, weight: active ? .semibold : .regular))
-        .foregroundColor(active ? .primary : .secondary)
-        .lineLimit(1)
+      // A Button (not a tap gesture) so the tab answers on mouse-down; the close
+      // button stays a sibling, since buttons don't nest.
+      Button(action: select) {
+        Text(title)
+          .font(.system(size: 13, weight: active ? .semibold : .regular))
+          .foregroundColor(active ? .primary : .secondary)
+          .lineLimit(1)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(ClassicPressStyle())
+      .accessibilityAddTraits(active ? .isSelected : [])
       if let close {
         Button(action: close) {
           Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
@@ -370,7 +377,7 @@ struct ContentView: View {
         .fill(active ? Color.primary.opacity(0.14) : Color.clear)
     )
     .contentShape(Rectangle())
-    .onTapGesture(perform: select)
+    .onTapGesture(perform: select)  // the padding around the title
   }
 
   // MARK: - Window body

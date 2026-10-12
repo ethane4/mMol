@@ -98,6 +98,7 @@ final class ClassicMenuController {
   }
 
   func close() {
+    pendingHover?.cancel()
     opener = nil
     panels.forEach { $0.orderOut(nil) }
     panels.removeAll()
@@ -106,6 +107,40 @@ final class ClassicMenuController {
     if let o = resignObserver { NotificationCenter.default.removeObserver(o) }
     resignObserver = nil
   }
+
+  private var pendingHover: DispatchWorkItem?
+  /// Where the pointer entered the previous row: the apex of the "safe triangle".
+  private var lastHoverPoint: NSPoint?
+
+  /// Hovering a row at `level`. Switching is instant, except while the pointer is
+  /// heading for an open submenu (inside the triangle from where it entered the
+  /// last row to the submenu's near edge): then crossing sibling rows on the way
+  /// waits briefly, and entering the submenu cancels the wait.
+  func hover(level: Int, _ apply: @escaping () -> Void) {
+    pendingHover?.cancel()
+    let point = NSEvent.mouseLocation
+    defer { lastHoverPoint = point }
+    guard panels.count > level + 1, let apex = lastHoverPoint,
+      headingInto(panels[level + 1].frame, from: apex, to: point)
+    else { return apply() }
+    let work = DispatchWorkItem(block: apply)
+    pendingHover = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+  }
+
+  /// Whether `p` lies in the triangle from `apex` to the submenu's near edge.
+  private func headingInto(_ sub: NSRect, from apex: NSPoint, to p: NSPoint) -> Bool {
+    let x = apex.x <= sub.minX ? sub.minX : sub.maxX
+    let (b, c) = (NSPoint(x: x, y: sub.maxY), NSPoint(x: x, y: sub.minY))
+    func side(_ u: NSPoint, _ v: NSPoint) -> CGFloat {
+      (v.x - u.x) * (p.y - u.y) - (v.y - u.y) * (p.x - u.x)
+    }
+    let (d1, d2, d3) = (side(apex, b), side(b, c), side(c, apex))
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))
+  }
+
+  /// Back on the row whose submenu is open: drop any pending switch.
+  func cancelPendingHover() { pendingHover?.cancel() }
 
   /// Hovering a submenu row: open its children beside it, replacing deeper levels.
   func openSubmenu(_ items: [ClassicMenuItem], level: Int, rowTop: CGFloat) {
@@ -281,11 +316,15 @@ private struct ClassicMenuList: View {
       .contentShape(Rectangle())
       .onHover { inside in
         guard inside, enabled else { return }
-        hovered = item.id
-        if case .submenu(let children, _) = item.kind {
-          ClassicMenuController.shared.openSubmenu(children, level: level + 1, rowTop: top)
-        } else {
-          ClassicMenuController.shared.closeLevels(from: level + 1)
+        let menu = ClassicMenuController.shared
+        if hovered == item.id { return menu.cancelPendingHover() }
+        menu.hover(level: level) {
+          hovered = item.id
+          if case .submenu(let children, _) = item.kind {
+            menu.openSubmenu(children, level: level + 1, rowTop: top)
+          } else {
+            menu.closeLevels(from: level + 1)
+          }
         }
       }
       .onTapGesture {

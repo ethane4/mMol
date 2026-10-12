@@ -1057,9 +1057,16 @@ static PyObject* CmdObjectRepColors(PyObject* self, PyObject* args) {
   // an iterate over the atoms would.
   std::map<int, std::vector<std::pair<int, int>>> counts;
   if (auto* obj = ExecutiveFindObjectMoleculeByName(G, name)) {
+    int const* const nbr = obj->getNeighborArray();
     for (int a = 0; a < obj->NAtom; ++a) {
       const AtomInfoType* ai = obj->AtomInfo + a;
-      int const vis = ai->visRep & cRepBitmask;
+      // Drop flags that draw nothing on this atom (load sets lines on lone
+      // waters, nb_spheres on bonded ligands): bond reps need a bond,
+      // nonbonded reps need none.
+      bool const bonded = nbr && nbr[nbr[a]] > 0;
+      int const vis = ai->visRep & cRepBitmask &
+                      ~(bonded ? cRepNonbondedBit | cRepNonbondedSphereBit
+                               : cRepLineBit | cRepCylBit);
       if (!vis) continue;
       mask |= vis;
       for (int r = 0; r < cRepCnt; ++r) {
