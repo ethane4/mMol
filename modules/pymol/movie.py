@@ -982,18 +982,10 @@ produce_mode_sc = Shortcut(produce_mode_dict.keys())
 
 
 def find_exe(exe):
-    r'''Return full path to executable or None.
-    Excludes C:\Windows\System32\convert.exe
-    Tests .exe extension on Unix (e.g. for legacy "mpeg_encode.exe" name).
+    '''Return full path to executable or None.
+    Tests .exe extension (e.g. for legacy "mpeg_encode.exe" name).
     '''
     from shutil import which
-
-    if exe.startswith('convert') and sys.platform == 'win32':
-        # filter out C:\Windows\System32
-        path = os.pathsep.join(
-            p for p in os.getenv('PATH', '').split(os.pathsep)
-            if r'\windows\system32' not in p.lower())
-        return which(exe, path=path)
 
     if exe == 'mpeg_encode':
         legacy = which(exe + '.exe')

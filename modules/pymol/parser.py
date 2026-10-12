@@ -571,36 +571,6 @@ if True:
             layer = self.layer[self.nest]
             return os.path.splitext(os.path.basename(layer.sc_path))[0]
 
-        def parse_stream(self, stream):
-            """Parse commands line-by-line from an input stream.
-            """
-            for line in stream:
-                # For embedded input on stdin bypass PyMOL C code altogether
-                if self.nest == 0 and self.layer[0].embed_sentinel is not None:
-                    self.parse(line)
-                else:
-                    self.cmd.do(line, flush=True)
-
-        def stdin_reader(self):
-            """Parse commands line-by-line from standard input. Run this
-            function in a daemon thread, otherwise it would lock up the GUI.
-            """
-            import sys
-
-            if sys.stdin is None:
-                if "pythonw" in sys.executable:
-                    msg = "Cannot listen to STDIN with pythonw.exe, use python.exe instead."
-                else:
-                    msg = "Cannot listen to STDIN, sys.stdin is None."
-                raise RuntimeError(msg)
-
-            self.parse_stream(sys.stdin)
-
-            if not self.cmd._pymol.invocation.options.keep_thread_alive:
-                self.cmd.quit()
-
-            self.cmd._pymol._stdin_reader_thread = None
-
         def complete(self, st):
             with self.cmd.lockcm:
                 return self._complete(st)

@@ -128,11 +128,8 @@ static int RepCylBondCGOGenerate(RepCylBond* I, RenderInfo* info) {
       use_shader &&  //
       SettingGet<bool>(*I->cs, cSetting_stick_as_cylinders) &&
       SettingGet<bool>(*I->cs, cSetting_render_as_cylinders) &&
-      // On the Metal renderer the GL "cylinder" shader program doesn't exist,
-      // but the Metal cylinder impostor pipeline stands in for it — keep the
-      // impostor path so cylinder_buffers are emitted and routed to
-      // RendererMetal::drawCylinderImpostors.
-      (G->Renderer || G->ShaderMgr->ShaderPrgExists("cylinder"));
+      // The Metal cylinder impostor pipeline draws cylinder_buffers.
+      G->Renderer;
 
   std::unique_ptr<CGO> convertcgo;
 
@@ -175,7 +172,6 @@ static int RepCylBondCGOGenerate(RepCylBond* I, RenderInfo* info) {
 void RepCylBond::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   PyMOLGlobals* G = I->G;
   int ok = true;
 
@@ -193,23 +189,13 @@ void RepCylBond::render(RenderInfo* info) {
       I->renderCGO = 0;
     }
 
-    if (pick) {
-      PRINTFD(G, FB_RepCylBond)
-      " RepCylBondRender: rendering pickable...\n" ENDFD;
-
-      if (I->renderCGO) {
-        CGORenderPicking(I->renderCGO, info, &I->context, I->cs->Setting.get(),
-                         I->obj->Setting.get());
-      }
-    } else { /* else not pick, i.e., when rendering */
-      if (!I->renderCGO) {
-        ok &= RepCylBondCGOGenerate(I, info);
-        assert(I->renderCGO);
-      }
-      const float* color = ColorGet(G, I->obj->Color);
-      I->renderCGO->debug = SettingGetGlobal_i(G, cSetting_stick_debug);
-      CGORender(I->renderCGO, color, nullptr, nullptr, info, I);
+    if (!I->renderCGO) {
+      ok &= RepCylBondCGOGenerate(I, info);
+      assert(I->renderCGO);
     }
+    const float* color = ColorGet(G, I->obj->Color);
+    I->renderCGO->debug = SettingGetGlobal_i(G, cSetting_stick_debug);
+    CGORender(I->renderCGO, color, nullptr, nullptr, info, I);
   }
 }
 
@@ -944,8 +930,4 @@ Rep* RepCylBondNew(CoordSet* cs, int state) {
   }
 
   return (Rep*)I;
-}
-
-void RepCylBondRenderImmediate(CoordSet* cs, RenderInfo* info) {
-  /* immediate mode rendering removed — use shader path instead */
 }

@@ -232,16 +232,11 @@ static void RepDistDashRenderRaster(RepDistDash* I, RenderInfo* info,
   CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
 }
 
-static void RepDistDashRenderPick(RepDistDash* I, RenderInfo* info) {
-  /* NO-OP */
-}
-
 // Immediate mode rendering removed — shader path is always used
 
 void RepDistDash::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   int color = SettingGet_color(G, nullptr, I->ds->Obj->Setting.get(),
                                cSetting_dash_color);
 
@@ -253,7 +248,7 @@ void RepDistDash::render(RenderInfo* info) {
     dash_transparency_opt = dash_transparency;
   }
 
-  if (!(ray || pick) &&
+  if (!ray &&
       (info->pass == RenderPass::Antialias ||
        (info->pass == RenderPass::Opaque) == dash_transparency_opt.has_value()))
     return;
@@ -272,10 +267,6 @@ void RepDistDash::render(RenderInfo* info) {
     return;
   }
   if (!(G->HaveGUI && G->ValidContext)) {
-    return;
-  }
-  if (pick) {
-    RepDistDashRenderPick(I, info);
     return;
   }
 

@@ -21,7 +21,6 @@ written to <tmpdir>/pymol_gizmo_<pid>.json, which Swift reads back synchronously
 NDC convention matches metal_pick / the gesture handlers: bottom-left origin,
 +x right, +y up, in [-1, 1].
 """
-import json
 import math
 
 from pymol import cmd
@@ -74,7 +73,6 @@ _ELEM_MASS = {
     'CL': 35.45,
     'K': 39.098
 }
-_PATH = mmol_tmp.channel_path('pymol_gizmo')
 
 # --- vector helpers ---------------------------------------------------------
 
@@ -143,41 +141,16 @@ def _rotate_basis(basis, axis, theta):
 
 
 def _view_params(aspect):
+    from mmol import pick as metal_pick
     try:
-        v = cmd.get_view()
+        cam = metal_pick.camera(cmd)
     except Exception:
         return None
-    if not v:
+    if cam is None or aspect <= 0.0:
         return None
-    if len(v) >= 25:
-        r0 = (v[0], v[4], v[8])
-        r1 = (v[1], v[5], v[9])
-        r2 = (v[2], v[6], v[10])
-        t = (v[16], v[17], v[18])
-        o = (v[19], v[20], v[21])
-        fov = abs(v[24])
-    else:  # 18-float embedded layout (what this build returns)
-        r0 = (v[0], v[3], v[6])
-        r1 = (v[1], v[4], v[7])
-        r2 = (v[2], v[5], v[8])
-        t = (v[9], v[10], v[11])
-        o = (v[12], v[13], v[14])
-        fov = abs(v[17])
-    if fov <= 1.0:
-        try:
-            fov = cmd.get_setting_float('field_of_view')
-        except Exception:
-            fov = 20.0
-    fov_width = 2.0 * math.tan(math.radians(fov) / 2.0)
-    tan_half = math.tan(fov_width / 2.0)
-    if tan_half <= 0.0 or aspect <= 0.0:
-        return None
-    try:  # orthoscopic: one scale at every depth (see metal_pick.camera)
-        ortho = max(1e-4, -t[2]) * fov_width / 2.0 if cmd.get_setting_int(
-            'orthoscopic') else 0.0
-    except Exception:
-        ortho = 0.0
-    return (r0, r1, r2, t, o, tan_half, aspect, ortho)
+    r = cam.rot
+    return (r[0:3], r[3:6], r[6:9], cam.pos, cam.origin, cam.tan_half, aspect,
+            cam.ortho_half)
 
 
 def _project(params, p):
@@ -454,8 +427,7 @@ def _emit(active=True):
         print('METALMOVE_ERR:' + str(e))
         out = {'active': False}
     try:
-        with open(_PATH, 'w') as f:
-            json.dump(out, f)
+        mmol_tmp.write_json('pymol_gizmo', out)
     except Exception:
         pass
 

@@ -61,9 +61,6 @@ void OVOneToOne_Reset(OVOneToOne* up) {
 
 static void Reload(OVOneToOne* up) { /* assumes hash tables are clean and
                                         initialized to zero */
-#ifdef DEBUG_UP
-  fprintf(stderr, "Reload-Debug: entered\n");
-#endif
   ov_uword mask = up->mask;
 
   if (up->elem && mask) {
@@ -104,15 +101,6 @@ static void Reload(OVOneToOne* up) { /* assumes hash tables are clean and
       }
     }
   }
-#ifdef DEBUG_UP
-  {
-    ov_uword a;
-    for (a = 0; a <= up->mask; a++) {
-      fprintf(stderr, "Reload-Debug: forward[%d]=%d, reverse[%d]=%d\n", a,
-              up->forward[a], a, up->reverse[a]);
-    }
-  }
-#endif
 }
 
 OVreturn_word OVOneToOne_GetForward(OVOneToOne* up, ov_word forward_value) {
@@ -148,9 +136,6 @@ static OVstatus Recondition(OVOneToOne* up, ov_uword size, int force) {
     return_OVstatus_NULL_PTR;
   } else {
     ov_uword mask = up->mask;
-#ifdef DEBUG_UP
-    fprintf(stderr, "Recondition-Debug: entered for size %d.\n", size);
-#endif
     if ((size > mask) || ((size << 2) < mask) || force) {
       while ((size << 2) < mask) {
         mask = mask >> 1;
@@ -161,9 +146,6 @@ static OVstatus Recondition(OVOneToOne* up, ov_uword size, int force) {
         mask = (mask << 1) + 1;
       }
 
-#ifdef DEBUG_UP
-      fprintf(stderr, "Recondition-Debug: mask %d\n", mask);
-#endif
       {
         if (!up->elem) {
           up->elem = OVHeapArray_CALLOC(up->heap, up_element, size);
@@ -316,37 +298,9 @@ OVstatus OVOneToOne_Set(OVOneToOne* up, ov_word forward_value,
       fwd = up->forward[fwd_hash];
       rev = up->reverse[rev_hash];
 
-#ifdef DEBUG_OVOneToOne
-      fprintf(stderr, "OVOneToOneSet-Debug: set %d,%d\n", forward_value,
-              reverse_value);
-      fprintf(stderr,
-              "OVOneToOneSet-Debug: fwd_hash %d rev_hash %d mask %d size %d\n",
-              fwd_hash, rev_hash, up->mask, up->size);
-      fprintf(stderr, "OVOneToOneSet-Debug: before search fwd rev %d %d\n", fwd,
-              rev);
-#endif
-
       { /* find elements if they exist, and detect erroneous conditions */
 
         up_element* elem = up->elem;
-
-#ifdef DEBUG_OVOneToOne
-        {
-          int a;
-          for (a = 0; a < up->size; a++) {
-            fprintf(stderr,
-                    "OVOneToOneSet-Debug: on entry %d forward_next: %d\n",
-                    a + 1, elem[a].forward_next);
-          }
-
-          for (a = 0; a <= up->mask; a++) {
-            fprintf(stderr,
-                    "OVOneToOneSet-Debug: on entry %d forward hash %d: "
-                    "reverse_hash: %d\n",
-                    a, up->forward[a], up->reverse[a]);
-          }
-        }
-#endif
 
         while (fwd) {
           fwd_elem = elem + (fwd - 1);
@@ -367,9 +321,6 @@ OVstatus OVOneToOne_Set(OVOneToOne* up, ov_word forward_value,
     if (!(fwd || rev)) {
       ov_size new_index;
       /* new pair */
-#ifdef DEBUG_OVOneToOne
-      fprintf(stderr, "OVOneToOneSet-Debug: New pair.\n");
-#endif
       if (up->n_inactive) {
         new_index = up->next_inactive;
         up->next_inactive = up->elem[new_index - 1].forward_next;
@@ -408,17 +359,6 @@ OVstatus OVOneToOne_Set(OVOneToOne* up, ov_word forward_value,
           elem->reverse_next = *reverse_start_index;
           *reverse_start_index = new_index; /* note the +1 offset */
         }
-
-#ifdef DEBUG_OVOneToOne
-        {
-          int a;
-          for (a = 0; a <= up->mask; a++) {
-            fprintf(stderr,
-                    "OVOneToOneSet-Debug: forward[%d]=%d, reverse[%d]=%d\n", a,
-                    up->forward[a], a, up->reverse[a]);
-          }
-        }
-#endif
       }
 
     } else if (fwd_elem != rev_elem) {

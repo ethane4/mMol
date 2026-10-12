@@ -22,7 +22,6 @@
 #include "pymol/base/base.h"
 #include "pymol/base/err.h"
 #include "pymol/reps/rep_sphere.h"
-#include "pymol/reps/rep_sphere_immediate.h"
 #include "pymol/reps/rep_sphere_generate.h"
 #include "pymol/color/color.h"
 #include "pymol/geometry/sphere.h"
@@ -93,14 +92,6 @@ static int RepSphereRenderRay(PyMOLGlobals* G, RepSphere* I, RenderInfo* info) {
   return true;
 }
 
-static void RepSphereRenderPick(RepSphere* I, RenderInfo* info,
-                                int sphere_mode) {
-  assert(I->renderCGO);
-
-  CGORenderPicking(I->renderCGO, info, &I->context, I->cs->Setting.get(),
-                   I->obj->Setting.get());
-}
-
 static int RepGetSphereMode(PyMOLGlobals* G, RepSphere* I, bool use_shader) {
   int sphere_mode = SettingGet_i(G, I->cs->Setting.get(), I->obj->Setting.get(),
                                  cSetting_sphere_mode);
@@ -124,8 +115,7 @@ static int RepGetSphereMode(PyMOLGlobals* G, RepSphere* I, bool use_shader) {
       // the Metal impostor pipeline does — keep mode 9 so sphere_buffers (the
       // impostor VBO) are emitted and routed to
       // RendererMetal::drawSphereImpostors.
-      if (!use_shader ||
-          (!G->Renderer && !G->ShaderMgr->ShaderPrgExists("sphere"))) {
+      if (!use_shader || !G->Renderer) {
         sphere_mode = 0;
       }
   }
@@ -135,7 +125,6 @@ static int RepGetSphereMode(PyMOLGlobals* G, RepSphere* I, bool use_shader) {
 void RepSphere::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   int ok = true;
   bool use_shader = SettingGetGlobal_b(G, cSetting_sphere_use_shader) &&
                     SettingGetGlobal_b(G, cSetting_use_shaders);
@@ -145,49 +134,45 @@ void RepSphere::render(RenderInfo* info) {
   }
   int sphere_mode = RepGetSphereMode(G, I, use_shader);
   if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-      RepSphereRenderPick(I, info, sphere_mode);
-    } else { /* not pick, render! */
-      if (I->spheroidCGO) {
-        CGORender(I->spheroidCGO, nullptr, nullptr, nullptr, info, I);
+    if (I->spheroidCGO) {
+      CGORender(I->spheroidCGO, nullptr, nullptr, nullptr, info, I);
+      return;
+    }
+
+    if (I->renderCGO) {
+      if (I->renderCGO->use_shader != use_shader) {
+        CGOFree(I->renderCGO);
+        I->renderCGO = 0;
+      } else {
+        CGORender(I->renderCGO, nullptr, nullptr, nullptr, info, I);
         return;
       }
-
-      if (I->renderCGO) {
-        if (I->renderCGO->use_shader != use_shader) {
-          CGOFree(I->renderCGO);
-          I->renderCGO = 0;
-        } else {
-          CGORender(I->renderCGO, nullptr, nullptr, nullptr, info, I);
-          return;
-        }
-      }
-      // Generate renderCGO for sphere_mode
-      switch (sphere_mode) {
-        case 0: /* memory-efficient sphere rendering */
-        case cSphereModeCube:
-        case cSphereModeTetrahedron:
-          RepSphere_Generate_Triangles(G, I, info);
-          break;
-        case 9:  // use GLSL impostor shader
-          RepSphere_Generate_Impostor_Spheres(G, I, info);
-          break;
-        default:
-          // sphere_modes 1,2,3,6,7,8
-          RepSphere_Generate_Point_Sprites(G, I, info, sphere_mode);
-          break;
-      }
-
-      CHECKOK(ok, I->renderCGO);
-      if (!ok) {
-        CGOFree(I->renderCGO);
-        I->invalidate(cRepInvPurge);
-        I->cs->Active[cRepSphere] = false;
-      }
-
-      if (I->renderCGO)
-        CGORender(I->renderCGO, nullptr, nullptr, nullptr, info, I);
     }
+    // Generate renderCGO for sphere_mode
+    switch (sphere_mode) {
+      case 0: /* memory-efficient sphere rendering */
+      case cSphereModeCube:
+      case cSphereModeTetrahedron:
+        RepSphere_Generate_Triangles(G, I, info);
+        break;
+      case 9:  // use GLSL impostor shader
+        RepSphere_Generate_Impostor_Spheres(G, I, info);
+        break;
+      default:
+        // sphere_modes 1,2,3,6,7,8
+        RepSphere_Generate_Point_Sprites(G, I, info, sphere_mode);
+        break;
+    }
+
+    CHECKOK(ok, I->renderCGO);
+    if (!ok) {
+      CGOFree(I->renderCGO);
+      I->invalidate(cRepInvPurge);
+      I->cs->Active[cRepSphere] = false;
+    }
+
+    if (I->renderCGO)
+      CGORender(I->renderCGO, nullptr, nullptr, nullptr, info, I);
   }
 }
 

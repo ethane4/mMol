@@ -69,15 +69,17 @@ static PyObject* CmdTest2(PyObject*, PyObject*) {
 /**
  * Start a headless singleton instance in the current thread.
  *
- * Unlike when calling `pymol.finish_launching()`, there is no event loop,
- * so animations, continuous sculpting and modal draw are not supported.
+ * There is no event loop, so animations, continuous sculpting and modal draw
+ * are not supported.
  *
  * After calling this, SingletonPyMOLGlobals will be available.
  */
 static void launch_library_singleton() {
+  // The options `pymol -cqk` used to set: no GUI, no splash, no pymolrc.
   PyRun_SimpleString(
       "import pymol.invocation, pymol2\n"
-      "pymol.invocation.parse_args(['pymol', '-cqk'])\n"
+      "pymol.invocation.options.__dict__.update(\n"
+      "    no_gui=1, external_gui=0, show_splash=0)\n"
       "pymol2.SingletonPyMOL().start()");
 }
 
@@ -266,22 +268,6 @@ PyObject* APIAutoNone(PyObject* result) { /* automatically owned Py_None */
     Py_INCREF(result);
   }
   return (result);
-}
-
-static PyObject* CmdRayAntiThread(PyObject* self, PyObject* args) {
-  PyMOLGlobals* G = nullptr;
-  PyObject* py_thread_info;
-  API_SETUP_ARGS(G, self, args, "OO", &self, &py_thread_info);
-
-  auto thread_info = reinterpret_cast<CRayAntiThreadInfo*>(
-      PyCapsule_GetPointer(py_thread_info, nullptr));
-  API_ASSERT(thread_info);
-
-  PUnblock(G);
-  RayAntiThread(thread_info);
-  PBlock(G);
-
-  return APISuccess();
 }
 
 static PyObject* CmdRayHashThread(PyObject* self, PyObject* args) {
@@ -1537,7 +1523,6 @@ static const PyMethodDef Cmd_methods[] = {
     {"quit", CmdQuit, METH_VARARGS},
     {"ray_trace_thread", CmdRayTraceThread, METH_VARARGS},
     {"ray_hash_thread", CmdRayHashThread, METH_VARARGS},
-    {"ray_anti_thread", CmdRayAntiThread, METH_VARARGS},
     {"refresh", CmdRefresh, METH_VARARGS},
     {"refresh_later", CmdRefreshLater, METH_VARARGS},
     {"refresh_now", CmdRefreshNow, METH_VARARGS},

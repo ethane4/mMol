@@ -90,12 +90,8 @@ final class MCPServerManager: ObservableObject {
     guard let engine, engine.isReady, !isRunning else { return }
     UserDefaults.standard.set(true, forKey: "mmol.mcp.enabled")
     // start() returns the live port; the manager learns it from the MCP:started line.
-    let b64 = Data(token.utf8).base64EncodedString()
     engine.runPython(
-      "import base64\n"
-        + "import mmol.mcp.server as _m\n"
-        + "_m.start(\(preferredPort), base64.b64decode('\(b64)').decode('utf-8'))"
-    )
+      "import mmol.mcp.server as _m\n_m.start(\(preferredPort), \(pyLiteral(token)))")
   }
 
   func stop() {

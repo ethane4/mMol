@@ -716,8 +716,6 @@ int SeqInit(PyMOLGlobals* G) {
     return 0;
 }
 
-static void SeqPurgeRowVLA(PyMOLGlobals* G) { G->Seq->Row.clear(); }
-
 void SeqSetRow(PyMOLGlobals* G, std::vector<CSeqRow>&& row, int nRow) {
   CSeq* I = G->Seq;
   I->Row = std::move(row);

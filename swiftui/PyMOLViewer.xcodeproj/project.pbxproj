@@ -9,19 +9,18 @@
 /* Begin PBXBuildFile section */
 		000218AEB9F9D4B835546001 /* unit_cell.cc in Sources */ = {isa = PBXBuildFile; fileRef = 8F53E89DA3B5B32E6271F400 /* unit_cell.cc */; };
 		011FD58D29E1F6A2EAA740DD /* cif_molecule_reader.cc in Sources */ = {isa = PBXBuildFile; fileRef = D9EC4FADFC9BDA752E4D4E87 /* cif_molecule_reader.cc */; };
-		01254A71E83B99AE8F2A2D4F /* rep_sphere_immediate.cc in Sources */ = {isa = PBXBuildFile; fileRef = F42A5693B25AF48836D3DC52 /* rep_sphere_immediate.cc */; };
 		01E24F76F611468E20BE1255 /* executive.cc in Sources */ = {isa = PBXBuildFile; fileRef = FA838F7C2F2061C9F9E5A16A /* executive.cc */; };
 		02795FCAC973BA358DBBE59D /* mmod_typing.cc in Sources */ = {isa = PBXBuildFile; fileRef = F568A18BE35E9DCE06CA2D81 /* mmod_typing.cc */; };
 		0386D31873F9084FD0892BD4 /* texture.cc in Sources */ = {isa = PBXBuildFile; fileRef = 047EEE9A703D2FBF13831A2B /* texture.cc */; };
 		03A2FEFF6442914F3F68E952 /* sphere.cc in Sources */ = {isa = PBXBuildFile; fileRef = D40A544F11B32637BAD11121 /* sphere.cc */; };
 		042F08F899EE19B73EFEC143 /* CommandPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B50D264C420888CBF7FDE633 /* CommandPanel.swift */; };
+		0526F9C91306F3188356F983 /* PyMOLColorMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA5C6D517CEAF9EF7D5AA83 /* PyMOLColorMenu.swift */; };
 		054AD4C08232B9F701ED6CBC /* object_molecule_pdb.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5C5EA267AA126792FDEBC157 /* object_molecule_pdb.cc */; };
 		057F3C59DACA26AAC603702E /* AppBuildInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AE160C6EB58F631604002E6 /* AppBuildInfoTests.swift */; };
 		06B84EE1B4A56D8B3A22842A /* object_map.cc in Sources */ = {isa = PBXBuildFile; fileRef = FE2B40DE3FA908C5AD170E41 /* object_map.cc */; };
 		06C714ED00BE20B5ED83EACA /* dtrplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFD729E49A87AB2B47F8FCF0 /* dtrplugin.cpp */; };
 		079B071AB492B995CF57638D /* ConsoleLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2525A88C5285B866035F9B8C /* ConsoleLogTests.swift */; };
 		07F2ECEED92CAE1716CD6454 /* cgo_convert.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4C64C3E747133FC2802F8E2C /* cgo_convert.cc */; };
-		08013E80E2CE3E487A002472 /* ov_one_to_any.cc in Sources */ = {isa = PBXBuildFile; fileRef = B9168F18F258153C5C73254F /* ov_one_to_any.cc */; };
 		0853D86E6D16517D27CF8679 /* cif_file.cc in Sources */ = {isa = PBXBuildFile; fileRef = 59981AD2525BC52368EB79FD /* cif_file.cc */; };
 		09081889A924C87AD921DEBA /* wizard.cc in Sources */ = {isa = PBXBuildFile; fileRef = F8D33CAF963B0EBDD8E90C0A /* wizard.cc */; };
 		09124227DFF1A6E1A8C6A364 /* seeker.cc in Sources */ = {isa = PBXBuildFile; fileRef = 3B054B9F099124CA3BA5E609 /* seeker.cc */; };
@@ -30,6 +29,7 @@
 		0A13ADF50501BA7678A2BA33 /* pymol.cc in Sources */ = {isa = PBXBuildFile; fileRef = 15791B9080E3FB33272750DB /* pymol.cc */; };
 		0A23C6B70FC824B9BA347E2C /* symmetry.cc in Sources */ = {isa = PBXBuildFile; fileRef = E2DDF76E63C8DDD1B282A558 /* symmetry.cc */; };
 		0AE2972AD6CEA3D2E3F02E49 /* selector_objects.cc in Sources */ = {isa = PBXBuildFile; fileRef = E7471D9FFC25F541D69722AF /* selector_objects.cc */; };
+		0AEEC1DB9A60154A363D064D /* PyLiteralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA780960035A2C23D09394CD /* PyLiteralTests.swift */; };
 		0C16F6712C3BE9BFFBDB4AA8 /* executive_settings.cc in Sources */ = {isa = PBXBuildFile; fileRef = 57BC88443C26B512B9522DF0 /* executive_settings.cc */; };
 		0C805D82691A8621E57570EB /* ttt.cc in Sources */ = {isa = PBXBuildFile; fileRef = 22119C96A92C899A6841A1B0 /* ttt.cc */; };
 		0E768D8DE725793AD1ECF74F /* selector_align.cc in Sources */ = {isa = PBXBuildFile; fileRef = A27A176CE29C8ECB38D0BC5C /* selector_align.cc */; };
@@ -47,9 +47,12 @@
 		19BA642188C7184517DFB456 /* selector_parse.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5C07D1DDF4A0CEBC70F9DD54 /* selector_parse.cc */; };
 		19F443C8292E4668F6EB8C1C /* executive_load.cc in Sources */ = {isa = PBXBuildFile; fileRef = CBBC0D0B27F559F119ACD15C /* executive_load.cc */; };
 		1BD437B02308D9737F707FB1 /* vtkplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A0E3756F931B906A73C1DFEB /* vtkplugin.cpp */; };
+		1BEE815336914DC055BF6264 /* ObjectCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4421E02404C59199D44BF725 /* ObjectCommands.swift */; };
 		1CCB31D5854C427AF29F5349 /* ov_one_to_one.cc in Sources */ = {isa = PBXBuildFile; fileRef = D0F449DC559F2C87AC4529D1 /* ov_one_to_one.cc */; };
+		1F4EA6D22379D6FA6C8EC835 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89BC3657CA88B3EC6B53FD16 /* SettingsSheet.swift */; };
 		1FA8F78E4A4508CA94A81371 /* vla.c in Sources */ = {isa = PBXBuildFile; fileRef = 3C40481F0EBFDFE50BFDB6E7 /* vla.c */; };
 		20E663923EB48A8513984A3E /* rep_sphere_generate.cc in Sources */ = {isa = PBXBuildFile; fileRef = FECFF92D50FF475456139B20 /* rep_sphere_generate.cc */; };
+		21EF6D9911027D39B3052A3E /* RepCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 421654D973191B17494907F1 /* RepCatalog.swift */; };
 		22C6D9892DE7CD88F1C81836 /* ring_finder.cc in Sources */ = {isa = PBXBuildFile; fileRef = 9FCC791AABDD02E63C71F303 /* ring_finder.cc */; };
 		2629FAD0E56D8C6CC4377BEF /* object_curve.cc in Sources */ = {isa = PBXBuildFile; fileRef = 07C111C85E75D0B57A947A57 /* object_curve.cc */; };
 		265C194660C3A37581A7DE16 /* object_volume.cc in Sources */ = {isa = PBXBuildFile; fileRef = 1CDC5B07617441CCF8D24A23 /* object_volume.cc */; };
@@ -74,6 +77,7 @@
 		34A8643D87D2326F0694D06C /* grdplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 10C5CA253D0E7E4670FFEA24 /* grdplugin.cpp */; };
 		368725B1674791A280B04011 /* spec_rec.cc in Sources */ = {isa = PBXBuildFile; fileRef = DE98FAE71F6E493446D07D45 /* spec_rec.cc */; };
 		36D62FC8D26C9B47448DD9FF /* text.cc in Sources */ = {isa = PBXBuildFile; fileRef = A63350FF9535F9EF59E32437 /* text.cc */; };
+		38625ED1F8A1D6802F722E90 /* PyMOLEngine+ClassicRay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7EE772AF9A807B8295D594 /* PyMOLEngine+ClassicRay.swift */; };
 		3920556B740A46E7394DDFB3 /* psfplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 2962D23A6D6682C490635DFC /* psfplugin.c */; };
 		39D56E38A606EA05834D9D55 /* ObjectPanelCopyExtractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9067EC240F21BA7F691088 /* ObjectPanelCopyExtractTests.swift */; };
 		3A88A461EA2F97E3101BEAE5 /* dsn6plugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 7D1EC3320EA6784D3CBDFE38 /* dsn6plugin.cpp */; };
@@ -85,7 +89,7 @@
 		3F96563B0EA8F919B068A421 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F059BB95517CE91BD3E26E /* ContentView.swift */; };
 		40059E82777962372D64BEB7 /* hydrogen_adder.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7C2F8AFF1AB07AED11CA949A /* hydrogen_adder.cc */; };
 		40465CC46249CF27A9E9634F /* executive_matrix.cc in Sources */ = {isa = PBXBuildFile; fileRef = EB5E5BAE16D957320330E4A7 /* executive_matrix.cc */; };
-		40E5C9EEE06DF8C9C07A8C00 /* ov_random.cc in Sources */ = {isa = PBXBuildFile; fileRef = 1B0197FBFE004F19125C50E9 /* ov_random.cc */; };
+		416E342C28820C381268E677 /* HeatmapPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B41083A0A2B10660775D894 /* HeatmapPanel.swift */; };
 		41D35A666F0247BAE45C0F44 /* dcdplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 18B11A4427C0A122DAF5B766 /* dcdplugin.c */; };
 		42D3395698D37E4BF7055EEA /* MCPBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A18D8A6B0FB56FCD3C31211 /* MCPBridge.swift */; };
 		43077EBEAF8800BDC0FC49A9 /* cgo_renderer.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2A695C1689850C5670522432 /* cgo_renderer.cc */; };
@@ -110,6 +114,7 @@
 		5009F21A18B6567161C18794 /* matrix.cc in Sources */ = {isa = PBXBuildFile; fileRef = 89F94C0A52C5CCF152F9E3B9 /* matrix.cc */; };
 		510202559687F929A6A847B1 /* isosurf.cc in Sources */ = {isa = PBXBuildFile; fileRef = A3B34091ECF01E5802F6D252 /* isosurf.cc */; };
 		5283A5FBE2AEE3BEE5138BBA /* p.cc in Sources */ = {isa = PBXBuildFile; fileRef = 6455A6D024841DB23AAD5B0A /* p.cc */; };
+		52B18293409105282871E285 /* SelectionBuilderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A559E67DE3748B8C4DEA0F /* SelectionBuilderSheet.swift */; };
 		535533D2666E78CE5BFCA683 /* plyplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = BA12AD90EAA7AB8C76CD1B17 /* plyplugin.cpp */; };
 		53893ECA6963D311240080A8 /* PlugIOManagerInit.c in Sources */ = {isa = PBXBuildFile; fileRef = 7D6172C937576CE0AB29E97B /* PlugIOManagerInit.c */; };
 		53F302909F508F50774DBAD5 /* dlpolyplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 932F4D71F544C430D5A80647 /* dlpolyplugin.c */; };
@@ -118,6 +123,7 @@
 		54ADD319559B807B8523E457 /* vaspoutcarplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 7285D3D7235FCF4A5EE6EF5A /* vaspoutcarplugin.c */; };
 		551EF3746500ABEEE8029356 /* mdfplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 24A9CDC8CCCAB2A4BFDDBC68 /* mdfplugin.cpp */; };
 		561FCF3D816BADF77D2BF281 /* renderer_metal_labels.mm in Sources */ = {isa = PBXBuildFile; fileRef = 39040648029E7CA5F00D1F7B /* renderer_metal_labels.mm */; };
+		56461673B51F9D2960E588DD /* PyMOLEngine+Movie.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88BF1433451E45CE50CBC998 /* PyMOLEngine+Movie.swift */; };
 		56AD0E0FEF7ACDD5C5CFEC4C /* xsfplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5E20DD84CA52BB4863BEB2F9 /* xsfplugin.cpp */; };
 		56BCC2F496D1D4DA99155B61 /* executive_python.cc in Sources */ = {isa = PBXBuildFile; fileRef = 8A76083F9152BF23F551B89E /* executive_python.cc */; };
 		56F9108C538671F99E852922 /* corplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = C092B3651048937AA518F45E /* corplugin.c */; };
@@ -142,10 +148,10 @@
 		6241698CA042F1AC86D34783 /* molecule_exporter.cc in Sources */ = {isa = PBXBuildFile; fileRef = 026EC304F8E90DC086DE884C /* molecule_exporter.cc */; };
 		62437F1132E84FA32A1601E9 /* vector.cc in Sources */ = {isa = PBXBuildFile; fileRef = 3205347D3AD7039619764D83 /* vector.cc */; };
 		62AE3EEE4C85682184370E96 /* molemeshplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0B1EB28F7762EAA2E5D314F9 /* molemeshplugin.cpp */; };
+		6377D56593EBF0504DFC018A /* PyMOLEngine+Picking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42864F7C3F24DE24E85E1286 /* PyMOLEngine+Picking.swift */; };
 		638145B511DD58031C1112B5 /* pconv.cc in Sources */ = {isa = PBXBuildFile; fileRef = 34F0B802B2B8B39F82070AA0 /* pconv.cc */; };
 		643002125EC17F118D155E6C /* vtfplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 719E62A8DA21C091D2ADB233 /* vtfplugin.c */; };
 		6572D7F380A7B6E8AC46E273 /* RenderOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4EC69BBE3A3203C921B7C2B /* RenderOptionsPanel.swift */; };
-		65E28D0C865FAFD37665F868 /* shader_prg.cc in Sources */ = {isa = PBXBuildFile; fileRef = F133936ED045B0A3420FEFF8 /* shader_prg.cc */; };
 		66DF562E7A524807C5F392BA /* character.cc in Sources */ = {isa = PBXBuildFile; fileRef = C75482750A1EAA5ED94E25DB /* character.cc */; };
 		67F2B5160A97CA06FF178DA3 /* ColorMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0524B98BE939981AFC5DBFDA /* ColorMenuTests.swift */; };
 		684F9AAC77593D632FDA40D3 /* rep_ribbon.cc in Sources */ = {isa = PBXBuildFile; fileRef = FF65B26786EB2A65E26A7ABA /* rep_ribbon.cc */; };
@@ -291,6 +297,7 @@
 		C3B2FD59BF0B0DAA4E4533D4 /* atom_info_history.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7313D8EDB099FEE5FA0448B2 /* atom_info_history.cc */; };
 		C3D96985F36FD692A3B48946 /* cgo_optimize.cc in Sources */ = {isa = PBXBuildFile; fileRef = 889B6733EEF2D9947D53C984 /* cgo_optimize.cc */; };
 		C3F4C17485486983A3313270 /* ccealignmodule.cc in Sources */ = {isa = PBXBuildFile; fileRef = 795E4B0B7CCA1396A20E61C0 /* ccealignmodule.cc */; };
+		C40F3647F218B0AAB4F75AB8 /* MCPDrivingIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B13424CCC799A09FEB8F8808 /* MCPDrivingIndicator.swift */; };
 		C61CBA6844B410F69A3BD75A /* font_type.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7042B0F40EAC39BF0971445F /* font_type.cc */; };
 		C76242CB6FEBD531141E0435 /* uhbdplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3679B82351266FC22DD8290B /* uhbdplugin.cpp */; };
 		C7FE93A55B6D429A9537468A /* ClaudeTerminal.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE9ADE4BB9ED6392F87C83F /* ClaudeTerminal.swift */; };
@@ -307,6 +314,7 @@
 		CBA3709FFD8CDCE8925B59A6 /* carplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = D4659017ADE08257B4ACF441 /* carplugin.c */; };
 		CBEE1E67FEC5FF86DBA8F1B5 /* ray_export.cc in Sources */ = {isa = PBXBuildFile; fileRef = A1922C5661E081001824FF58 /* ray_export.cc */; };
 		CC20A43093A6B95E0C8B3F67 /* pqrplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 4E709B6AFBDF3C645C5A0BEA /* pqrplugin.c */; };
+		CC68DB763DCB37B1485B0F23 /* PyMOLEngine+Move.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8635576A2A7A57382F6F6DC /* PyMOLEngine+Move.swift */; };
 		CCCF36E888D261A5851F14C9 /* assembly_helpers.cc in Sources */ = {isa = PBXBuildFile; fileRef = 796065DE406E18497BB4DCF2 /* assembly_helpers.cc */; };
 		CDCCA59A323EC8C0F56CB8E5 /* font_glut_9x15.cc in Sources */ = {isa = PBXBuildFile; fileRef = F85F98045BC31A5DEBCCEEF3 /* font_glut_9x15.cc */; };
 		CDF3AAA0D8C64CFC4A43DE4C /* err2.c in Sources */ = {isa = PBXBuildFile; fileRef = 648D3D79C112558406711118 /* err2.c */; };
@@ -342,10 +350,8 @@
 		E47E3E6627F79724F5C6B68D /* selector.cc in Sources */ = {isa = PBXBuildFile; fileRef = 6E08F5CB87E19F25942D90BA /* selector.cc */; };
 		E49285B4E255A38B8AA10948 /* pbeqplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = DF8A2DAAAD76F0ECED02812F /* pbeqplugin.cpp */; };
 		E54C886F96E9C552DBAEC125 /* object_cgo.cc in Sources */ = {isa = PBXBuildFile; fileRef = 5AF7EBEE3B19C1046490A822 /* object_cgo.cc */; };
-		E5F658B6F65B795C132E0EFB /* post_process.cc in Sources */ = {isa = PBXBuildFile; fileRef = 71B16A26C995FB4EEAE1EB19 /* post_process.cc */; };
 		E73EF0CD77F49269163080CA /* brixplugin.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0C59A191D551BD8818ED18A1 /* brixplugin.cpp */; };
 		E777A44381A854B382874738 /* MCPConnectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE692F1547C53D28B5F9A9AD /* MCPConnectSheet.swift */; };
-		E88B82B9A91D6EDD7D4FB4EC /* scene_picking.cc in Sources */ = {isa = PBXBuildFile; fileRef = 7D736A60BACF7495E1A1DA4D /* scene_picking.cc */; };
 		E979DB6DFAB75419F7B3B651 /* vaspparchgplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = D7DA869EBF9B14DF34F3E215 /* vaspparchgplugin.c */; };
 		E9E374E4D648F46D4D32A6E3 /* cif_map_reader.cc in Sources */ = {isa = PBXBuildFile; fileRef = DBA0EB72B78244E27E1472D6 /* cif_map_reader.cc */; };
 		EA47BED947C01ECA7B14157C /* selector_dss.cc in Sources */ = {isa = PBXBuildFile; fileRef = 63F1BABD37FDA50E265A3C43 /* selector_dss.cc */; };
@@ -362,7 +368,6 @@
 		F399A1C7B4432DDB5D08CF27 /* hash.c in Sources */ = {isa = PBXBuildFile; fileRef = 59C235C94283A6772497E624 /* hash.c */; };
 		F441EB5FC37D06A008BA88B2 /* bond_type_history.cc in Sources */ = {isa = PBXBuildFile; fileRef = D63B9CB37A4F000421EC0D05 /* bond_type_history.cc */; };
 		F4A983BF1EB848A742F28B23 /* basissetplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = 3E29FB852B01287CC3D69CE6 /* basissetplugin.c */; };
-		F4B0ED522742FC38BFD36368 /* MCPDrivingBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9EC978B16F58D988575E206 /* MCPDrivingBanner.swift */; };
 		F5733F08B00BD24659432181 /* main_thread.cc in Sources */ = {isa = PBXBuildFile; fileRef = DE4C8CA8ADFBAB63EB7CDB08 /* main_thread.cc */; };
 		F58726A64F44A9435AD8517D /* MCPDesktopInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 786939619F7871E32E2BB123 /* MCPDesktopInstaller.swift */; };
 		F619DEB3EA3D691634AE8268 /* MousePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221117550FAD97CF81924E05 /* MousePanel.swift */; };
@@ -371,7 +376,6 @@
 		F9575C2C68AA886B956C98F7 /* sort.c in Sources */ = {isa = PBXBuildFile; fileRef = DD7BB2E29EF15D19586968DF /* sort.c */; };
 		FA2474DE7F1BE17688581271 /* object_mesh.cc in Sources */ = {isa = PBXBuildFile; fileRef = A54DD46D6108256EA9E92C71 /* object_mesh.cc */; };
 		FD7A228409C52C3D9AA47A22 /* picking.cc in Sources */ = {isa = PBXBuildFile; fileRef = 8C5B34B948047D3DA45CF9AD /* picking.cc */; };
-		FDDBA85F938DF9FA7EAD8CE9 /* ov_heap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 38560CBDB14260D058D72253 /* ov_heap.cc */; };
 		FE435905DDF3048D5AD646C5 /* vaspchgcarplugin.c in Sources */ = {isa = PBXBuildFile; fileRef = DAB84B15B29E730F5122CFC3 /* vaspchgcarplugin.c */; };
 		FEA9C6D6468B6BB157BD8A5A /* champ.c in Sources */ = {isa = PBXBuildFile; fileRef = EEE778F8D6362F21C06722C9 /* champ.c */; };
 		FF6FD31CA6A1E02E046D1385 /* font_glut_hel12.cc in Sources */ = {isa = PBXBuildFile; fileRef = E36C9232147B7D697874DEA4 /* font_glut_hel12.cc */; };
@@ -417,6 +421,7 @@
 		07C111C85E75D0B57A947A57 /* object_curve.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = object_curve.cc; sourceTree = "<group>"; };
 		08CB1ECFB33239520C394D6F /* moldenplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = moldenplugin.c; sourceTree = "<group>"; };
 		0B1EB28F7762EAA2E5D314F9 /* molemeshplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = molemeshplugin.cpp; sourceTree = "<group>"; };
+		0B41083A0A2B10660775D894 /* HeatmapPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeatmapPanel.swift; sourceTree = "<group>"; };
 		0C47FBC551127AB2D73BC6CE /* MetalViewportResponderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalViewportResponderTests.swift; sourceTree = "<group>"; };
 		0C59A191D551BD8818ED18A1 /* brixplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = brixplugin.cpp; sourceTree = "<group>"; };
 		0CF21BCDEB340CF9AD1283DD /* pop.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = pop.cc; sourceTree = "<group>"; };
@@ -439,7 +444,6 @@
 		1A18D8A6B0FB56FCD3C31211 /* MCPBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPBridge.swift; sourceTree = "<group>"; };
 		1A55383922D69D691CA1BAB1 /* 1ubq.cif */ = {isa = PBXFileReference; path = 1ubq.cif; sourceTree = "<group>"; };
 		1AF16594A3BA941923365987 /* renderer_metal.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = renderer_metal.mm; sourceTree = "<group>"; };
-		1B0197FBFE004F19125C50E9 /* ov_random.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ov_random.cc; sourceTree = "<group>"; };
 		1B3EEDC92905268E87503814 /* atom_iterators.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = atom_iterators.cc; sourceTree = "<group>"; };
 		1CDC5B07617441CCF8D24A23 /* object_volume.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = object_volume.cc; sourceTree = "<group>"; };
 		1D92846F7AD7F8EB28F2A544 /* cif_bonds.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cif_bonds.cc; sourceTree = "<group>"; };
@@ -476,7 +480,6 @@
 		3679B82351266FC22DD8290B /* uhbdplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = uhbdplugin.cpp; sourceTree = "<group>"; };
 		3697F74BD2283492B5A7790C /* KeyRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRouting.swift; sourceTree = "<group>"; };
 		3752BDD68704EB99B3A8C5E0 /* cmd_settings.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cmd_settings.cc; sourceTree = "<group>"; };
-		38560CBDB14260D058D72253 /* ov_heap.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ov_heap.cc; sourceTree = "<group>"; };
 		39040648029E7CA5F00D1F7B /* renderer_metal_labels.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = renderer_metal_labels.mm; sourceTree = "<group>"; };
 		398EDF2039DE43C02BDDDDBB /* pltplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = pltplugin.cpp; sourceTree = "<group>"; };
 		3A0879983C4703E11DAC7094 /* object_molecule_amber.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = object_molecule_amber.cc; sourceTree = "<group>"; };
@@ -489,10 +492,13 @@
 		4033D417FA1E50E5EC8B3A23 /* tinkerplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = tinkerplugin.c; sourceTree = "<group>"; };
 		4048EF2E65AF9714DD535A39 /* image_utils.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = image_utils.cc; sourceTree = "<group>"; };
 		40A9FB185091098405069469 /* phiplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = phiplugin.cpp; sourceTree = "<group>"; };
+		421654D973191B17494907F1 /* RepCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepCatalog.swift; sourceTree = "<group>"; };
 		42183C2198B4C916266F5B0F /* shaker.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = shaker.cc; sourceTree = "<group>"; };
 		424DA59E8B5C54C888F58817 /* ov_lexicon.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ov_lexicon.cc; sourceTree = "<group>"; };
+		42864F7C3F24DE24E85E1286 /* PyMOLEngine+Picking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PyMOLEngine+Picking.swift"; sourceTree = "<group>"; };
 		42FBE8ED18BFEB10BE265EEA /* ov_context.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ov_context.cc; sourceTree = "<group>"; };
 		439FFA3F33F5FCE1007DB0C5 /* abinitplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = abinitplugin.c; sourceTree = "<group>"; };
+		4421E02404C59199D44BF725 /* ObjectCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectCommands.swift; sourceTree = "<group>"; };
 		4436A43634E9B10AACDFA3E9 /* libchamp.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libchamp.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		4456456518422E9FB5811B4D /* cmd_io.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cmd_io.cc; sourceTree = "<group>"; };
 		45C07E264B8AB1E58FA5843C /* cubeplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cubeplugin.cpp; sourceTree = "<group>"; };
@@ -558,7 +564,6 @@
 		709FFFB334EAE1BB082FE0D4 /* namdbinplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = namdbinplugin.c; sourceTree = "<group>"; };
 		70D0C13FB585E5C430D2DF76 /* tetsurf.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = tetsurf.cc; sourceTree = "<group>"; };
 		719E62A8DA21C091D2ADB233 /* vtfplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vtfplugin.c; sourceTree = "<group>"; };
-		71B16A26C995FB4EEAE1EB19 /* post_process.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = post_process.cc; sourceTree = "<group>"; };
 		72627D007E7CCE620893FB13 /* rep_surface_color.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep_surface_color.cc; sourceTree = "<group>"; };
 		7278C22AAE6E2090FFEEC41C /* usalign.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = usalign.cc; sourceTree = "<group>"; };
 		7285D3D7235FCF4A5EE6EF5A /* vaspoutcarplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vaspoutcarplugin.c; sourceTree = "<group>"; };
@@ -577,7 +582,6 @@
 		7C2F8AFF1AB07AED11CA949A /* hydrogen_adder.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = hydrogen_adder.cc; sourceTree = "<group>"; };
 		7D1EC3320EA6784D3CBDFE38 /* dsn6plugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = dsn6plugin.cpp; sourceTree = "<group>"; };
 		7D6172C937576CE0AB29E97B /* PlugIOManagerInit.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = PlugIOManagerInit.c; sourceTree = "<group>"; };
-		7D736A60BACF7495E1A1DA4D /* scene_picking.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = scene_picking.cc; sourceTree = "<group>"; };
 		7DA7A46AE4C456D80644EB1A /* metal_pick.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = metal_pick.cc; sourceTree = "<group>"; };
 		7E9067EC240F21BA7F691088 /* ObjectPanelCopyExtractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjectPanelCopyExtractTests.swift; sourceTree = "<group>"; };
 		7F8A1F4A874909F493D1511D /* executive_editing.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = executive_editing.cc; sourceTree = "<group>"; };
@@ -594,6 +598,8 @@
 		86B2D30A144F1ABF235B5449 /* menu.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = menu.cc; sourceTree = "<group>"; };
 		889B6733EEF2D9947D53C984 /* cgo_optimize.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cgo_optimize.cc; sourceTree = "<group>"; };
 		88A4CBFB5761C6A15F64A42D /* editor.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = editor.cc; sourceTree = "<group>"; };
+		88BF1433451E45CE50CBC998 /* PyMOLEngine+Movie.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PyMOLEngine+Movie.swift"; sourceTree = "<group>"; };
+		89BC3657CA88B3EC6B53FD16 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		89F94C0A52C5CCF152F9E3B9 /* matrix.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = matrix.cc; sourceTree = "<group>"; };
 		8A76083F9152BF23F551B89E /* executive_python.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = executive_python.cc; sourceTree = "<group>"; };
 		8B9A9F268530D6ADA179863C /* util.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = util.cc; sourceTree = "<group>"; };
@@ -655,6 +661,8 @@
 		AF4DD7FC6D5FB00336554345 /* vasp5xdatcarplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vasp5xdatcarplugin.c; sourceTree = "<group>"; };
 		AFD729E49A87AB2B47F8FCF0 /* dtrplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = dtrplugin.cpp; sourceTree = "<group>"; };
 		AFE965137BFD20339AFB5A1E /* type_face.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = type_face.cc; sourceTree = "<group>"; };
+		B13424CCC799A09FEB8F8808 /* MCPDrivingIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPDrivingIndicator.swift; sourceTree = "<group>"; };
+		B1A559E67DE3748B8C4DEA0F /* SelectionBuilderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionBuilderSheet.swift; sourceTree = "<group>"; };
 		B381FF2F1B93E4F567B38F71 /* crdplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = crdplugin.c; sourceTree = "<group>"; };
 		B47211EDB3E34DF3B0CFE8BB /* PanelLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelLayout.swift; sourceTree = "<group>"; };
 		B507FEB8063C719A614D4C91 /* mol2_typing.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = mol2_typing.cc; sourceTree = "<group>"; };
@@ -663,9 +671,7 @@
 		B80BF55E429E2A53ED1AF8DA /* object_callback.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = object_callback.cc; sourceTree = "<group>"; };
 		B820FE9080BF73526A54CD66 /* TimelinePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelinePanel.swift; sourceTree = "<group>"; };
 		B8560CACA2567A17B4B5FE23 /* graphics_util.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = graphics_util.cc; sourceTree = "<group>"; };
-		B9168F18F258153C5C73254F /* ov_one_to_any.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ov_one_to_any.cc; sourceTree = "<group>"; };
 		B945DAC97919F57996278E1F /* TempChannelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempChannelTests.swift; sourceTree = "<group>"; };
-		B9EC978B16F58D988575E206 /* MCPDrivingBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPDrivingBanner.swift; sourceTree = "<group>"; };
 		BA12AD90EAA7AB8C76CD1B17 /* plyplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = plyplugin.cpp; sourceTree = "<group>"; };
 		BAEAE83E5C56DD3CD4E854B0 /* feedback2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = feedback2.c; sourceTree = "<group>"; };
 		BB5121657E4C9A2A7EF11516 /* rep_wire_bond.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep_wire_bond.cc; sourceTree = "<group>"; };
@@ -675,6 +681,7 @@
 		BE853B7BED40E55BB6691346 /* crystal.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = crystal.cc; sourceTree = "<group>"; };
 		BED26E3DD56BA54294B0D9B5 /* object_gadget.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = object_gadget.cc; sourceTree = "<group>"; };
 		BF078193C49828D5F1809390 /* sculpt_cache.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = sculpt_cache.cc; sourceTree = "<group>"; };
+		BFA5C6D517CEAF9EF7D5AA83 /* PyMOLColorMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PyMOLColorMenu.swift; sourceTree = "<group>"; };
 		C092B3651048937AA518F45E /* corplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = corplugin.c; sourceTree = "<group>"; };
 		C1998222BEF1260E6BD7E267 /* object_map_grid.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = object_map_grid.cc; sourceTree = "<group>"; };
 		C3D051658CBEEF10E4F92375 /* cmd_editing.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cmd_editing.cc; sourceTree = "<group>"; };
@@ -682,6 +689,7 @@
 		C75482750A1EAA5ED94E25DB /* character.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = character.cc; sourceTree = "<group>"; };
 		CA562E55222E915B7B284028 /* chiral.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = chiral.c; sourceTree = "<group>"; };
 		CA5AB843B767B5AE50D26C74 /* executive_session.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = executive_session.cc; sourceTree = "<group>"; };
+		CA780960035A2C23D09394CD /* PyLiteralTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PyLiteralTests.swift; sourceTree = "<group>"; };
 		CB60BA28AC1F3A033719979D /* rep_cartoon.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep_cartoon.cc; sourceTree = "<group>"; };
 		CBAF2B6AE3AD7D5912D62606 /* rep.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep.cc; sourceTree = "<group>"; };
 		CBBC0D0B27F559F119ACD15C /* executive_load.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = executive_load.cc; sourceTree = "<group>"; };
@@ -717,6 +725,7 @@
 		DAB84B15B29E730F5122CFC3 /* vaspchgcarplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = vaspchgcarplugin.c; sourceTree = "<group>"; };
 		DB09D3FE9582A8BFDB568619 /* shader_mgr.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = shader_mgr.cc; sourceTree = "<group>"; };
 		DBA0EB72B78244E27E1472D6 /* cif_map_reader.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = cif_map_reader.cc; sourceTree = "<group>"; };
+		DC7EE772AF9A807B8295D594 /* PyMOLEngine+ClassicRay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PyMOLEngine+ClassicRay.swift"; sourceTree = "<group>"; };
 		DD73565AE0DB371AE370FF5B /* list.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = list.c; sourceTree = "<group>"; };
 		DD7BB2E29EF15D19586968DF /* sort.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = sort.c; sourceTree = "<group>"; };
 		DD8F6001A415B0A429101E6B /* setting_effects.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = setting_effects.cc; sourceTree = "<group>"; };
@@ -744,16 +753,15 @@
 		EE929AE2179F77D823FF9AFC /* pdbplugin.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = pdbplugin.c; sourceTree = "<group>"; };
 		EEE778F8D6362F21C06722C9 /* champ.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = champ.c; sourceTree = "<group>"; };
 		EF30146A2EAC571E47A37F9D /* parmplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = parmplugin.cpp; sourceTree = "<group>"; };
-		F133936ED045B0A3420FEFF8 /* shader_prg.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = shader_prg.cc; sourceTree = "<group>"; };
 		F3415A828575E8B4983176C1 /* edmplugin.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = edmplugin.cpp; sourceTree = "<group>"; };
 		F3BAE7ADEAB8F82E0907B844 /* libpymol_core.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libpymol_core.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		F42A5693B25AF48836D3DC52 /* rep_sphere_immediate.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep_sphere_immediate.cc; sourceTree = "<group>"; };
 		F42DE2CA31677DE5E8628C00 /* scene_render.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = scene_render.cc; sourceTree = "<group>"; };
 		F43E4051E6410834AAAA4047 /* InteractionModeExitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionModeExitTests.swift; sourceTree = "<group>"; };
 		F568A18BE35E9DCE06CA2D81 /* mmod_typing.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = mmod_typing.cc; sourceTree = "<group>"; };
 		F61B9A042E88CAE1E21BC506 /* KeyRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyRoutingTests.swift; sourceTree = "<group>"; };
 		F70B3E74417AE61505331F38 /* tracker.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = tracker.cc; sourceTree = "<group>"; };
 		F85F98045BC31A5DEBCCEEF3 /* font_glut_9x15.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = font_glut_9x15.cc; sourceTree = "<group>"; };
+		F8635576A2A7A57382F6F6DC /* PyMOLEngine+Move.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PyMOLEngine+Move.swift"; sourceTree = "<group>"; };
 		F8D33CAF963B0EBDD8E90C0A /* wizard.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = wizard.cc; sourceTree = "<group>"; };
 		F9CFCC230CD5A82B0C8A528C /* but_mode.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = but_mode.cc; sourceTree = "<group>"; };
 		F9CFF9872159701B3447592A /* file.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = file.cc; sourceTree = "<group>"; };
@@ -772,7 +780,7 @@
 		FECFF92D50FF475456139B20 /* rep_sphere_generate.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep_sphere_generate.cc; sourceTree = "<group>"; };
 		FED661033EAE3D058F6CBFD5 /* rep_surface_job.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep_surface_job.cc; sourceTree = "<group>"; };
 		FF65B26786EB2A65E26A7ABA /* rep_ribbon.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = rep_ribbon.cc; sourceTree = "<group>"; };
-		"TEMP_4F9B9A58-21F5-4D3D-B5BF-37B8AC90C91A" /* PyMOLBridge.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = PyMOLBridge.xcconfig; sourceTree = "<group>"; };
+		"TEMP_0C4D12C3-298D-4103-B7EF-480F81C20777" /* PyMOLBridge.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = PyMOLBridge.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -872,14 +880,20 @@
 				ABE9ADE4BB9ED6392F87C83F /* ClaudeTerminal.swift */,
 				B50D264C420888CBF7FDE633 /* CommandPanel.swift */,
 				6E3AFD4F9FB79316452CFB0C /* ContactMapView.swift */,
+				0B41083A0A2B10660775D894 /* HeatmapPanel.swift */,
 				CE692F1547C53D28B5F9A9AD /* MCPConnectSheet.swift */,
-				B9EC978B16F58D988575E206 /* MCPDrivingBanner.swift */,
+				B13424CCC799A09FEB8F8808 /* MCPDrivingIndicator.swift */,
 				FB1304C662D9011F7C4505FC /* MCPStatusView.swift */,
 				221117550FAD97CF81924E05 /* MousePanel.swift */,
 				8FE79EC8844C681A41A1E54A /* MovieExportSheet.swift */,
+				4421E02404C59199D44BF725 /* ObjectCommands.swift */,
 				A73267D4D7B506E647B7A995 /* ObjectPanel.swift */,
+				BFA5C6D517CEAF9EF7D5AA83 /* PyMOLColorMenu.swift */,
 				A4EC69BBE3A3203C921B7C2B /* RenderOptionsPanel.swift */,
+				421654D973191B17494907F1 /* RepCatalog.swift */,
+				B1A559E67DE3748B8C4DEA0F /* SelectionBuilderSheet.swift */,
 				474D18A43D0D9A6BDD69EEFD /* SequencePanel.swift */,
+				89BC3657CA88B3EC6B53FD16 /* SettingsSheet.swift */,
 				B820FE9080BF73526A54CD66 /* TimelinePanel.swift */,
 				9BFFDE1BE889AEDCB21208B6 /* ToolTabs.swift */,
 				C562306A5AD1EEDDBA931B98 /* TransportBar.swift */,
@@ -1071,7 +1085,6 @@
 				93CE70566A17FCF61D4DBA4D /* rep_nonbonded.cc */,
 				FF65B26786EB2A65E26A7ABA /* rep_ribbon.cc */,
 				FECFF92D50FF475456139B20 /* rep_sphere_generate.cc */,
-				F42A5693B25AF48836D3DC52 /* rep_sphere_immediate.cc */,
 				4E173601EACCDB96D0147BED /* rep_sphere.cc */,
 				72627D007E7CCE620893FB13 /* rep_surface_color.cc */,
 				AA066E715633FAEDECB3FAB3 /* rep_surface_dots.cc */,
@@ -1123,7 +1136,6 @@
 				E6235CE309E1E2D9ADFEB4E9 /* scene_image.cc */,
 				2895E8347795A23A21FA4394 /* scene_mouse.cc */,
 				5F70391C7768DF1D308208D3 /* scene_move.cc */,
-				7D736A60BACF7495E1A1DA4D /* scene_picking.cc */,
 				F42DE2CA31677DE5E8628C00 /* scene_render.cc */,
 				F9F8437BD52B30E1BC75D31C /* scene_roving.cc */,
 				DA3B0F85F1517EC6582D1B97 /* scene_view.cc */,
@@ -1177,6 +1189,10 @@
 				B47211EDB3E34DF3B0CFE8BB /* PanelLayout.swift */,
 				D965CB609C447033E5DB0046 /* PyMOLApp.swift */,
 				33D6A753E4525628B96C259C /* PyMOLEngine.swift */,
+				DC7EE772AF9A807B8295D594 /* PyMOLEngine+ClassicRay.swift */,
+				F8635576A2A7A57382F6F6DC /* PyMOLEngine+Move.swift */,
+				88BF1433451E45CE50CBC998 /* PyMOLEngine+Movie.swift */,
+				42864F7C3F24DE24E85E1286 /* PyMOLEngine+Picking.swift */,
 				E92551FEC4351D9D44AE620B /* TempChannel.swift */,
 			);
 			path = Shared;
@@ -1261,6 +1277,7 @@
 				7E9067EC240F21BA7F691088 /* ObjectPanelCopyExtractTests.swift */,
 				4A2C1E1633D1E93E9914BEC3 /* OpenFilesTests.swift */,
 				B75287139FE86E2C9524CA8D /* PanelLayoutTests.swift */,
+				CA780960035A2C23D09394CD /* PyLiteralTests.swift */,
 				CFFF22FEEF0B50EA77E9A577 /* RenderGateTests.swift */,
 				55F4F52D951CF1F96606F41C /* SmokeTests.swift */,
 				B945DAC97919F57996278E1F /* TempChannelTests.swift */,
@@ -1320,11 +1337,8 @@
 			children = (
 				42FBE8ED18BFEB10BE265EEA /* ov_context.cc */,
 				2AE7E5B2A8EA04B8984D1DD4 /* ov_heap_array.cc */,
-				38560CBDB14260D058D72253 /* ov_heap.cc */,
 				424DA59E8B5C54C888F58817 /* ov_lexicon.cc */,
-				B9168F18F258153C5C73254F /* ov_one_to_any.cc */,
 				D0F449DC559F2C87AC4529D1 /* ov_one_to_one.cc */,
-				1B0197FBFE004F19125C50E9 /* ov_random.cc */,
 				A7EE348E0070C08AB95C3E9C /* ov_utility.cc */,
 			);
 			path = ov;
@@ -1354,9 +1368,7 @@
 				FB5ABFA32D5E6B1E54C2D5FC /* generic_buffer.cc */,
 				CC367E5A123DF9F3223C0E44 /* gfx_manager.cc */,
 				B8560CACA2567A17B4B5FE23 /* graphics_util.cc */,
-				71B16A26C995FB4EEAE1EB19 /* post_process.cc */,
 				DB09D3FE9582A8BFDB568619 /* shader_mgr.cc */,
-				F133936ED045B0A3420FEFF8 /* shader_prg.cc */,
 				047EEE9A703D2FBF13831A2B /* texture.cc */,
 				8F53E89DA3B5B32E6271F400 /* unit_cell.cc */,
 				8E746ECBA1F25B8495C99F93 /* gl */,
@@ -1510,10 +1522,10 @@
 			path = Bridge;
 			sourceTree = "<group>";
 		};
-		"TEMP_F8CFFBF4-5CBB-44E8-8DDA-F12AA505A800" /* swiftui */ = {
+		"TEMP_818DE66A-02FB-4C8F-B207-8AC8E52E2808" /* swiftui */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_4F9B9A58-21F5-4D3D-B5BF-37B8AC90C91A" /* PyMOLBridge.xcconfig */,
+				"TEMP_0C4D12C3-298D-4103-B7EF-480F81C20777" /* PyMOLBridge.xcconfig */,
 			);
 			path = swiftui;
 			sourceTree = "<group>";
@@ -1801,6 +1813,7 @@
 				39D56E38A606EA05834D9D55 /* ObjectPanelCopyExtractTests.swift in Sources */,
 				C89E138879C40C8FB6C0478A /* OpenFilesTests.swift in Sources */,
 				31E2886301F34D938627FF2D /* PanelLayoutTests.swift in Sources */,
+				0AEEC1DB9A60154A363D064D /* PyLiteralTests.swift in Sources */,
 				A06FDF7F7F66614128096DDF /* RenderGateTests.swift in Sources */,
 				5CAB662574D238626A8F4D68 /* SmokeTests.swift in Sources */,
 				6C43C62D56480ABE7BA72AFD /* TempChannelTests.swift in Sources */,
@@ -1822,24 +1835,34 @@
 				3F96563B0EA8F919B068A421 /* ContentView.swift in Sources */,
 				8F71359FAD68AE5D09416C1B /* GizmoOverlay.swift in Sources */,
 				5BDDAF08893A11769DF4EFA2 /* Heatmap.swift in Sources */,
+				416E342C28820C381268E677 /* HeatmapPanel.swift in Sources */,
 				768E23FCAB4D2B27205900B6 /* KeyRouting.swift in Sources */,
 				42D3395698D37E4BF7055EEA /* MCPBridge.swift in Sources */,
 				E777A44381A854B382874738 /* MCPConnectSheet.swift in Sources */,
 				F58726A64F44A9435AD8517D /* MCPDesktopInstaller.swift in Sources */,
-				F4B0ED522742FC38BFD36368 /* MCPDrivingBanner.swift in Sources */,
+				C40F3647F218B0AAB4F75AB8 /* MCPDrivingIndicator.swift in Sources */,
 				3ECB633FC33E73F4767D3AF5 /* MCPServerManager.swift in Sources */,
 				DE0E67FF8DD0D44121F1B386 /* MCPStatusView.swift in Sources */,
 				80C4F16DA1BB7EFF8D5767C3 /* MMolMain.swift in Sources */,
 				979AB10150CC62EE5E7962F9 /* MetalViewport.swift in Sources */,
 				F619DEB3EA3D691634AE8268 /* MousePanel.swift in Sources */,
 				7B9C53449F7557047170D008 /* MovieExportSheet.swift in Sources */,
+				1BEE815336914DC055BF6264 /* ObjectCommands.swift in Sources */,
 				5992346BC7D06026A673BA71 /* ObjectPanel.swift in Sources */,
 				B806C9AB4B89EAE3676F25E2 /* PanelLayout.swift in Sources */,
 				5C923361D76329D2A466FFA9 /* PyMOLApp.swift in Sources */,
 				5D4BC69196C1256F5164E56A /* PyMOLBridge.mm in Sources */,
+				0526F9C91306F3188356F983 /* PyMOLColorMenu.swift in Sources */,
+				38625ED1F8A1D6802F722E90 /* PyMOLEngine+ClassicRay.swift in Sources */,
+				CC68DB763DCB37B1485B0F23 /* PyMOLEngine+Move.swift in Sources */,
+				56461673B51F9D2960E588DD /* PyMOLEngine+Movie.swift in Sources */,
+				6377D56593EBF0504DFC018A /* PyMOLEngine+Picking.swift in Sources */,
 				8852A9FA93BDAAB188D4103C /* PyMOLEngine.swift in Sources */,
 				6572D7F380A7B6E8AC46E273 /* RenderOptionsPanel.swift in Sources */,
+				21EF6D9911027D39B3052A3E /* RepCatalog.swift in Sources */,
+				52B18293409105282871E285 /* SelectionBuilderSheet.swift in Sources */,
 				300656C47AD9A9C18C129C42 /* SequencePanel.swift in Sources */,
+				1F4EA6D22379D6FA6C8EC835 /* SettingsSheet.swift in Sources */,
 				CAF843374D732DB9B276BCF3 /* TempChannel.swift in Sources */,
 				DA6EB8C81B26582A4F3AB478 /* TimelinePanel.swift in Sources */,
 				89A966D5711F8430269BE589 /* ToolTabs.swift in Sources */,
@@ -2017,12 +2040,9 @@
 				4BC1796427FACD4FA5916C34 /* offplugin.cpp in Sources */,
 				312584B8505F9D685F61F81C /* ortho.cc in Sources */,
 				4B63761C40EE2BE28CE3EE45 /* ov_context.cc in Sources */,
-				FDDBA85F938DF9FA7EAD8CE9 /* ov_heap.cc in Sources */,
 				6DCFE3A55D69932D72CE77BA /* ov_heap_array.cc in Sources */,
 				9C9B7199A23AFD5F87BFFBAD /* ov_lexicon.cc in Sources */,
-				08013E80E2CE3E487A002472 /* ov_one_to_any.cc in Sources */,
 				1CCB31D5854C427AF29F5349 /* ov_one_to_one.cc in Sources */,
-				40E5C9EEE06DF8C9C07A8C00 /* ov_random.cc in Sources */,
 				F680588C0B988ABAE534F149 /* ov_utility.cc in Sources */,
 				5283A5FBE2AEE3BEE5138BBA /* p.cc in Sources */,
 				A33A7B1F504B97D218BE3CF1 /* parm7plugin.cpp in Sources */,
@@ -2040,7 +2060,6 @@
 				535533D2666E78CE5BFCA683 /* plyplugin.cpp in Sources */,
 				7F1C33077EDF4BE2E0649FB9 /* pop.cc in Sources */,
 				D588497812E916EBC820FF1C /* pop_up.cc in Sources */,
-				E5F658B6F65B795C132E0EFB /* post_process.cc in Sources */,
 				CC20A43093A6B95E0C8B3F67 /* pqrplugin.c in Sources */,
 				1383056D1D0D1AE02571BAE7 /* print_utils.cc in Sources */,
 				CF8F6B3E9B9E49140DB4E788 /* property.cc in Sources */,
@@ -2078,7 +2097,6 @@
 				684F9AAC77593D632FDA40D3 /* rep_ribbon.cc in Sources */,
 				7DF36508ABF30912054B8951 /* rep_sphere.cc in Sources */,
 				20E663923EB48A8513984A3E /* rep_sphere_generate.cc in Sources */,
-				01254A71E83B99AE8F2A2D4F /* rep_sphere_immediate.cc in Sources */,
 				B97F5F23CF666D78737365DB /* rep_surface.cc in Sources */,
 				C8BFCB1B63A4696CE62DA8A1 /* rep_surface_color.cc in Sources */,
 				4D7D13481FC960C00D329B84 /* rep_surface_dots.cc in Sources */,
@@ -2090,7 +2108,6 @@
 				969D84F71A91E42CF60596A3 /* scene_image.cc in Sources */,
 				326C3E29AAA4FC14A8E60C11 /* scene_mouse.cc in Sources */,
 				C83A8AE774DCB8DDEABC7FDA /* scene_move.cc in Sources */,
-				E88B82B9A91D6EDD7D4FB4EC /* scene_picking.cc in Sources */,
 				AA84525B17C46E32E43F4734 /* scene_ray.cc in Sources */,
 				9A18FE699DF0B74B95CC20FF /* scene_render.cc in Sources */,
 				2CECB44E45DB20294EF2EFB8 /* scene_roving.cc in Sources */,
@@ -2113,7 +2130,6 @@
 				2981CFEF5F1290BF62AC0F9A /* setting.cc in Sources */,
 				3EAFE2B8D6DB4AF658759E5E /* setting_effects.cc in Sources */,
 				542E76457BA7F15F20FBBF18 /* shader_mgr.cc in Sources */,
-				65E28D0C865FAFD37665F868 /* shader_prg.cc in Sources */,
 				D07AE1BEE6C7EB144A7CF4F6 /* shaker.cc in Sources */,
 				B6D9D3ECA265F01B4419225A /* side_chain_helper.cc in Sources */,
 				2B888FB01D8A5058903E109F /* situsplugin.cpp in Sources */,
@@ -2337,7 +2353,7 @@
 		};
 		76B7E9DB75E073D1E60928FA /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_4F9B9A58-21F5-4D3D-B5BF-37B8AC90C91A" /* PyMOLBridge.xcconfig */;
+			baseConfigurationReference = "TEMP_0C4D12C3-298D-4103-B7EF-480F81C20777" /* PyMOLBridge.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -2462,7 +2478,7 @@
 		};
 		D8F44FDFF036013D2F03BA83 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_4F9B9A58-21F5-4D3D-B5BF-37B8AC90C91A" /* PyMOLBridge.xcconfig */;
+			baseConfigurationReference = "TEMP_0C4D12C3-298D-4103-B7EF-480F81C20777" /* PyMOLBridge.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;

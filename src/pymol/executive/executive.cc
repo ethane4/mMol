@@ -2263,27 +2263,6 @@ void ExecutiveFullScreen(PyMOLGlobals* G, int flag) {
 
   _is_full_screen = (flag != 0);
 
-#ifndef _PYMOL_NO_GLUT
-  if (G->HaveGUI && G->ValidContext) {
-    if (flag) {
-      if (wm_flag < 1) {
-        CExecutive* I = G->Executive;
-        I->oldPX = p_glutGet(P_GLUT_WINDOW_X);
-        I->oldPY = p_glutGet(P_GLUT_WINDOW_Y);
-        I->oldWidth = p_glutGet(P_GLUT_WINDOW_WIDTH);
-        I->oldHeight = p_glutGet(P_GLUT_WINDOW_HEIGHT);
-      }
-
-      p_glutFullScreen();
-    } else {
-      // freeglut < 2.6
-      CExecutive* I = G->Executive;
-      p_glutReshapeWindow(I->oldWidth, I->oldHeight);
-      p_glutPositionWindow(I->oldPX, I->oldPY);
-    }
-  }
-#endif
-
   PyMOL_NeedReshape(G->PyMOL, flag, 0, 0, 0, 0);
   SceneChanged(G);
 }
@@ -2574,25 +2553,6 @@ pymol::Result<> ExecutiveDeleteStates(PyMOLGlobals* G, std::string_view name,
   return {};
 }
 
-void ExecutiveReAddSpec(PyMOLGlobals* G, std::vector<DiscardedRec>& specs) {
-  auto I = G->Executive;
-  for (auto& spec : specs) {
-    auto rec = spec.rec;
-    auto pos = spec.pos;
-    rec->cand_id = TrackerNewCand(I->Tracker, (TrackerRef*)rec);
-    TrackerLink(I->Tracker, rec->cand_id, I->all_names_list_id, 1);
-    TrackerLink(I->Tracker, rec->cand_id, I->all_obj_list_id, 1);
-    ListInsertAt(I->Spec, rec, pos);
-    ExecutiveAddKey(I, rec);
-    ExecutiveInvalidatePanelList(G);
-    if (rec->type == cExecObject) {
-      rec->in_scene = SceneObjectAdd(G, rec->obj);
-    }
-    ExecutiveInvalidateSceneMembers(G);
-    ExecutiveUpdateGroups(G, true);
-  }
-  specs.clear();
-}
 void ExecutiveDump(PyMOLGlobals* G, const char* fname, const char* obj,
                    int state, int quiet) {
   SpecRec* rec = nullptr;
@@ -3070,8 +3030,6 @@ int ExecutiveInit(PyMOLGlobals* G) {
     I->all_sel_list_id = TrackerNewList(I->Tracker, nullptr);
     I->active = true;
     OrthoAttach(G, I, cOrthoTool);
-    I->oldWidth = 640;
-    I->oldHeight = 480;
 
     I->Lex = OVLexicon_New(G->Context->heap);
 
@@ -3290,18 +3248,6 @@ std::vector<OrderRec> ExecutiveGetOrderOf(PyMOLGlobals* G,
   };
   std::sort(recs.begin(), recs.end(), sort_by_pos);
   return recs;
-}
-
-void ExecutiveSetOrderOf(PyMOLGlobals* G, const std::vector<OrderRec>& recs) {
-  auto I = G->Executive;
-  for (const auto& oRec : recs) {
-    auto rec = ExecutiveFindSpec(G, oRec.name);
-    auto detachedRec = ListDetachT(I->Spec, rec);
-    ListInsertAt(I->Spec, detachedRec, oRec.pos);
-  }
-  if (!recs.empty()) {
-    ExecutiveInvalidatePanelList(G);
-  }
 }
 
 pymol::Result<> ExecutiveBackgroundColor(PyMOLGlobals* G,

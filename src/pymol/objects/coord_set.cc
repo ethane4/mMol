@@ -38,7 +38,6 @@ Z* -------------------------------------------------------------------
 #include "pymol/reps/rep_dot.h"
 #include "pymol/reps/rep_mesh.h"
 #include "pymol/reps/rep_sphere.h"
-#include "pymol/reps/rep_sphere_immediate.h"
 #include "pymol/reps/rep_ribbon.h"
 #include "pymol/reps/rep_cartoon.h"
 #include "pymol/reps/rep_surface.h"
@@ -1119,21 +1118,11 @@ void CoordSetUpdateCoord2IdxMap(CoordSet* I, float cutoff) {
 }
 void CoordSet::render(RenderInfo* info) {
   const auto pass = info->pass;
-  const auto pick = bool(info->pick);
   auto* ray = info->ray;
   auto use_shader = SettingGet<bool>(G, cSetting_use_shaders);
 
-  if (!(ray || pick) &&
-      (SettingGet<int>(*this, cSetting_defer_builds_mode) == 5)) {
-    if (pass == RenderPass::Antialias) {
-      ObjectUseColor(Obj);
-      if (Active[cRepLine]) RepWireBondRenderImmediate(this, info);
-      if (Active[cRepNonbonded]) RepNonbondedRenderImmediate(this, info);
-      if (Active[cRepSphere]) RepSphereRenderImmediate(this, info);
-      if (Active[cRepCyl]) RepCylBondRenderImmediate(this, info);
-      if (Active[cRepRibbon]) RepRibbonRenderImmediate(this, info);
-    }
-
+  // defer_builds_mode 5 drew with immediate-mode GL, which is gone.
+  if (!ray && (SettingGet<int>(*this, cSetting_defer_builds_mode) == 5)) {
     return;
   }
 
@@ -1145,7 +1134,7 @@ void CoordSet::render(RenderInfo* info) {
     if (ray) {
       CGORenderRay(SculptCGO, ray, info, ColorGet(G, Obj->Color), nullptr,
                    Setting.get(), Obj->Setting.get());
-    } else if (G->HaveGUI && G->ValidContext && !pick) {
+    } else if (G->HaveGUI && G->ValidContext) {
       if (!info->use_shaders) {
         CGOFree(SculptShaderCGO);
       } else if (!SculptShaderCGO) {
@@ -1162,8 +1151,7 @@ void CoordSet::render(RenderInfo* info) {
     if (ray) {
       CGORenderRay(UnitCellCGO.get(), ray, info, ColorGet(G, Obj->Color),
                    nullptr, Setting.get(), Obj->Setting.get());
-    } else if (!pick && pass == RenderPass::Opaque && G->HaveGUI &&
-               G->ValidContext) {
+    } else if (pass == RenderPass::Opaque && G->HaveGUI && G->ValidContext) {
       ObjectUseColor(Obj);
       auto renderCGO = UnitCellCGO.get();
       if (use_shader && UnitCellShaderCGO) {
@@ -1174,17 +1162,7 @@ void CoordSet::render(RenderInfo* info) {
     }
   }
 
-  auto aastart = cRep_t(0), aaend = cRepCnt;
-
-  if (pick) {
-    int pick_labels = SettingGet<int>(*this, cSetting_pick_labels);
-    if (pick_labels == 2) {  // only pick labels
-      aastart = cRepLabel;
-      aaend = cRep_t(aastart + 1);
-    }
-  }
-
-  for (auto a = aastart; a != aaend; ++a) {
+  for (auto a = cRep_t(0); a != cRepCnt; ++a) {
     auto* const r = Rep[a];
 
     if (!(r && Active[a])) {
@@ -1200,7 +1178,7 @@ void CoordSet::render(RenderInfo* info) {
       ray->color3fv(ColorGet(G, Obj->Color));
     }
 
-    if (ray || pick) {
+    if (ray) {
       r->render(info);
       continue;
     }

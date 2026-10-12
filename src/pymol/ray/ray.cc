@@ -550,7 +550,6 @@ void RayRenderTest(CRay* I, int width, int height, float front, float back,
       I->NPrimitive ENDFB(I->G);
 }
 
-#define noIDTF_COLOR
 void RayProjectTriangle(CRay* I, RayInfo* r, float* light, float* v0, float* n0,
                         float scale) {
   float w2;

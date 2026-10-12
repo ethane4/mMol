@@ -93,14 +93,6 @@ void Block::recursiveDraw(CGO* orthoCGO) {
   }
 }
 
-bool Block::recursiveFastDraw(CGO* orthoCGO) {
-  bool ret = false;
-  if (active) {
-    ret |= fastDraw(orthoCGO);
-  }
-  return ret;
-}
-
 Block* Block::recursiveFind(int x, int y) {
   if (!active || !rectXYInside(x, y)) {
     return nullptr;

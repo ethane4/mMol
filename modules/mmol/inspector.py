@@ -324,54 +324,6 @@ def transp_summary(obj):
     return out
 
 
-# object_has_atom_transp walks every atom, so with many objects it dominated
-# this 500 ms main-thread poll (25 of 29 ms with 16 structures). Results are
-# kept per object and computed within a small time budget per poll, new
-# objects first, so a badge catches up within a few polls (and loading 60
-# objects doesn't stall one poll for 0.4 s).
-_transp_cache = {}
-_transp_turn = 0
-
-
-def _has_transp_map(objs):
-    import time
-    global _transp_turn
-    for o in list(_transp_cache):
-        if o not in objs:
-            del _transp_cache[o]
-    end = time.perf_counter() + 0.003
-    for o in objs:
-        if o not in _transp_cache:
-            if time.perf_counter() > end:
-                break
-            _transp_cache[o] = object_has_atom_transp(o)
-    for k in range(len(objs)):
-        if time.perf_counter() > end:
-            break
-        o = objs[(_transp_turn + k) % len(objs)]
-        _transp_cache[o] = object_has_atom_transp(o)
-        _transp_turn = (_transp_turn + k + 1) % len(objs)
-    return {o: _transp_cache.get(o, False) for o in objs}
-
-
-def object_has_atom_transp(obj):
-    """True when any ACTIVE rep of `obj` has a per-atom transparency override — the
-    signal for the collapsed-row badge. Rep-gated so an override on a hidden rep
-    (which the user can't see and the expanded card wouldn't show) doesn't flag.
-    The count_atoms probe runs only when an override exists (cheap short-circuit).
-    """
-    summ = transp_summary(obj)
-    for rep, setting in REP_TRANSP.items():
-        entry = summ.get(setting)
-        if entry and entry[2]:
-            try:
-                if cmd.count_atoms('(%s) & rep %s' % (obj, rep)) > 0:
-                    return True
-            except Exception:
-                pass
-    return False
-
-
 def _build(objs, extent=True):
     detail = {}
     # One lookup for the whole tick. takes_atom_selection() also guards, but calling
@@ -507,12 +459,9 @@ def poll(objs, extent=True):
     leaked into the terminal log. So write the full JSON to a temp file (same
     TMPDIR the Swift app reads) and emit only `OBJDETAIL:ready` — same pattern as
     the sequence panel."""
-    import json
     from mmol import tmp as mmol_tmp
     try:
-        p = mmol_tmp.channel_path('pymol_objdetail')
-        with open(p, 'w') as _f:
-            _f.write(json.dumps(_build(objs, extent)))
+        mmol_tmp.write_json('pymol_objdetail', _build(objs, extent))
         print('OBJDETAIL:ready')
     except Exception as e:
         print('OBJDETAIL_ERR:' + str(e))
@@ -581,14 +530,13 @@ def poll_panel():
     """Write the object-list JSON to a temp file and print a short marker.
 
     Same rationale as poll(), for the object side-panel's list (#231). The payload
-    grows ~62 bytes per object (name + per-object nstate/has_transp), so printing
+    grows ~62 bytes per object (name + per-object nstate), so printing
     it inline as `OBJPANEL:<json>` overflowed PyMOL's ~1KB feedback-line cap at
     ~16 objects — e.g. after `split_states` on a 20-model NMR ensemble. The core
     then split the line: the truncated first fragment still carried the OBJPANEL:
     prefix but failed JSON decode (so the panel froze on the stale list), and the
     prefix-less continuation leaked into the console on every poll tick. Keep the
     payload off the feedback line entirely and emit only `OBJPANEL:ready`."""
-    import json
     from mmol import tmp as mmol_tmp
     try:
         objs = list(cmd.get_names('public_objects') or [])
@@ -614,23 +562,15 @@ def poll_panel():
             'nstate': {
                 o: cmd.count_states('?' + o) for o in objs
             },
-            'has_transp': _has_transp_map(objs),
             'groups': groups,
             'parent': parents,
             'maps': list(cmd.get_names_of_type('object:map') or []),
         }
-        # Serialise BEFORE opening the file. open(..., 'w') truncates immediately, so
-        # doing the dumps inside the `with` leaves a ZERO-BYTE file behind when a value
-        # turns out not to be JSON-serialisable -- worse than a stale one, and it takes
-        # every other reader of this path down with the panel.
-        blob = json.dumps(payload)
         # Multiple mMol windows may run as separate processes. A process-local
         # filename prevents an empty instance from replacing another instance's
         # populated object list and briefly showing the empty-state overlay over
         # a rendered molecule.
-        p = mmol_tmp.channel_path('pymol_objpanel')
-        with open(p, 'w') as _f:
-            _f.write(blob)
+        mmol_tmp.write_json('pymol_objpanel', payload)
         print('OBJPANEL:ready')
     except Exception as e:
         print('OBJPANEL_ERR:' + str(e))

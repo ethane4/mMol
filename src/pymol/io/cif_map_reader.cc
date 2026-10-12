@@ -166,20 +166,6 @@ static std::size_t HKLToFlatIndex(const glm::ivec3& hkl,
 }
 
 /**
- * @brief Convert flat index to HKL
- * @param flat_idx The flat index
- * @param shape The shape of the map
- * @return The HKL corresponding to the flat index
- */
-static glm::ivec3 FlatIndexToHKL(std::size_t flat_idx,
-                                 const glm::ivec3& shape) {
-  int iz = flat_idx % shape[2];
-  int iy = (flat_idx / shape[2]) % shape[1];
-  int ix = flat_idx / (shape[1] * shape[2]);
-  return glm::ivec3(ix, iy, iz);
-}
-
-/**
  * @brief Create an ObjectMapState from a CFieldTyped map and symmetry
  * @param map The map to convert
  * @param sym The symmetry to use

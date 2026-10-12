@@ -227,7 +227,7 @@ def camera(_self=None):
       origin      rotation origin, in MODEL space
       fov         vertical field of view, degrees
       tan_half    half-height slope at unit depth (see below)
-      clip_*      near/far slab distances, or None if the layout didn't carry them
+      clip_*      near/far slab distances
       view        the raw get_view() tuple (diagnostics)
 
     Projecting a model point with these is:
@@ -245,30 +245,23 @@ def camera(_self=None):
     v = _self.get_view()
     if not v:
         return None
-    if len(v) >= 25:
-        # 4x4 column-major rotation -> 3x3 rows (model -> camera).
-        rot = (v[0], v[4], v[8], v[1], v[5], v[9], v[2], v[6], v[10])
-        pos = (v[16], v[17], v[18])  # camera pos (eye translation)
-        origin = (v[19], v[20], v[21])  # rotation origin (model space)
-        fov_deg = abs(v[24])
-        clip_front = clip_back = None  # 25-float clip layout unverified; skip
-    else:
-        # Legacy 18-float layout (what our embedded build returns):
-        #   v[0:9]=3x3 rotation, v[9:12]=pos, v[12:15]=origin,
-        #   v[15]=front, v[16]=back, v[17]=fov flag.
-        # The rotation is COLUMN-MAJOR (same as the 25-float / GL convention
-        # and the Metal renderer's modelview). Parsing it row-major TRANSPOSES
-        # it — harmless for axis-aligned views but, under a real `orient`
-        # rotation, it projects atoms to the wrong screen positions, so the
-        # click selects an atom that renders far from the cursor.
-        rot = (v[0], v[3], v[6], v[1], v[4], v[7], v[2], v[5], v[8])
-        pos = (v[9], v[10], v[11])
-        origin = (v[12], v[13], v[14])
-        fov_deg = abs(v[17])
-        clip_front, clip_back = v[15], v[
-            16]  # slab: pickable only in [front,back]
+    # The 18-float layout: v[0:9]=3x3 rotation, v[9:12]=pos, v[12:15]=origin,
+    # v[15]=front, v[16]=back, v[17]=fov flag.
+    # The rotation is COLUMN-MAJOR (the GL convention and the Metal renderer's
+    # modelview). Parsing it row-major TRANSPOSES it — harmless for
+    # axis-aligned views but, under a real `orient` rotation, it projects atoms
+    # to the wrong screen positions, so the click selects an atom that renders
+    # far from the cursor.
+    rot = (v[0], v[3], v[6], v[1], v[4], v[7], v[2], v[5], v[8])
+    pos = (v[9], v[10], v[11])
+    origin = (v[12], v[13], v[14])
+    fov_deg = abs(v[17])
+    clip_front, clip_back = v[15], v[16]  # slab: pickable only in [front,back]
     if fov_deg <= 1.0:
-        fov_deg = _self.get_setting_float('field_of_view')
+        try:
+            fov_deg = _self.get_setting_float('field_of_view')
+        except Exception:
+            fov_deg = 20.0
     fov_width = 2.0 * math.tan(math.radians(fov_deg) / 2.0)
     tan_half = math.tan(fov_width / 2.0)
     if tan_half <= 0.0:
@@ -301,8 +294,7 @@ def half_height(cam, depth):
 # ~75 ms/pick at 50k drawn atoms, more than saturating the main thread (#394).
 # _python_pick is the same math in Python, kept as the reference the native
 # path is tested against, for the PYMOL_PICKDEBUG harness (which reports
-# projection diagnostics the C++ path doesn't collect), and for cores built
-# without the metal_pick entry point.
+# projection diagnostics the C++ path doesn't collect).
 
 # Reps drawn AT THE ATOM's own position, as a visRep bitmask for the native
 # pick -- the same filter _DRAWN_REPS spells out as a selection (still used by
@@ -318,7 +310,6 @@ _GUIDE_REP_NAMES = ('cartoon', 'ribbon')
 _CURRENT_STATE = -2
 
 _rep_masks_cache = None
-_native_pick_cache = None
 
 
 def _rep_masks():
@@ -334,19 +325,6 @@ def _rep_masks():
             guide |= repmasks[rep]
         _rep_masks_cache = (drawn, guide)
     return _rep_masks_cache
-
-
-def _have_native_pick():
-    """Whether this core carries the C++ pick. Cached — it cannot change within
-    a session, and this sits on the hover path."""
-    global _native_pick_cache
-    if _native_pick_cache is None:
-        try:
-            from pymol.cmd import _cmd
-            _native_pick_cache = hasattr(_cmd, 'metal_pick')
-        except Exception:
-            _native_pick_cache = False
-    return _native_pick_cache
 
 
 def _native_pick(pick_objs, cam, ndc_x, ndc_y, aspect, thresh):
@@ -579,7 +557,7 @@ def _pick_atom(ndc_x, ndc_y, aspect, max_ndc2=None):
         # The debug harness wants the projection diagnostics only the Python
         # path collects (candidate count, projected extent), and has no use for
         # the native path's speed.
-        if _have_native_pick() and not os.environ.get('PYMOL_PICKDEBUG'):
+        if not os.environ.get('PYMOL_PICKDEBUG'):
             return _native_pick(pick_objs, cam, ndc_x, ndc_y, aspect, thresh)
         return _python_pick(pick_objs, cam, ndc_x, ndc_y, aspect, thresh)
 
@@ -699,12 +677,12 @@ def center_at(ndc_x, ndc_y, aspect):
 
 def pick_info_at(ndc_x, ndc_y, aspect):
     """Identify the atom/residue under a long-press WITHOUT changing the
-    selection, and write its identity to <tmpdir>/pymol_longpress.json for the
+    selection, and write its identity to the pymol_longpress channel for the
     context menu to read. Empty space -> {"hit": false}.
 
     Mirrors pick_at's hit logic (shared _pick_atom) but is read-only: it never
     touches 'sele', so opening the context menu doesn't perturb the scene."""
-    import json, os, tempfile
+    import json
     out = {"hit": False}
     try:
         best = _pick_atom(ndc_x, ndc_y, aspect)
@@ -727,7 +705,8 @@ def pick_info_at(ndc_x, ndc_y, aspect):
         print('metal_pick pick_info error: %s' % e)
         out = {"hit": False}
     try:
-        path = os.path.join(tempfile.gettempdir(), 'pymol_longpress.json')
+        from mmol import tmp as mmol_tmp
+        path = mmol_tmp.channel_path('pymol_longpress')
         with open(path, 'w') as f:
             json.dump(out, f)
     except Exception:

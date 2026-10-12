@@ -62,7 +62,7 @@ static int RepCartoonCGOGenerate(RepCartoon* I, RenderInfo* info) {
   PyMOLGlobals* G = I->G;
   int ok = true;
 
-  int use_shaders, has_cylinders_to_optimize;
+  int use_shaders;
   float alpha =
       1.0F - SettingGet_f(G, I->cs->Setting.get(), I->obj->Setting.get(),
                           cSetting_cartoon_transparency);
@@ -82,11 +82,6 @@ static int RepCartoonCGOGenerate(RepCartoon* I, RenderInfo* info) {
 
   use_shaders = SettingGetGlobal_b(G, cSetting_use_shaders) &&
                 SettingGetGlobal_b(G, cSetting_cartoon_use_shader);
-  has_cylinders_to_optimize =
-      G->ShaderMgr->Get_CylinderShader(info->pass, 0) &&
-      SettingGetGlobal_i(G, cSetting_cartoon_nucleic_acid_as_cylinders) &&
-      SettingGetGlobal_b(G, cSetting_render_as_cylinders) &&
-      CGOHasCylinderOperations(I->preshader);
 
   assert(!I->std);
 
@@ -110,21 +105,7 @@ static int RepCartoonCGOGenerate(RepCartoon* I, RenderInfo* info) {
       std::unique_ptr<CGO> leftOverCGOManaged;
       std::unique_ptr<CGO> convertcgo(CGONew(G));
 
-      if (has_cylinders_to_optimize &&
-          G->ShaderMgr->Get_CylinderShader(info->pass, 0)) {
-        /* Optimize Cylinders into Shader operation */
-        leftOverCGOManaged.reset(CGONew(G));
-        leftOverCGOBorrowed = leftOverCGOManaged.get();
-        CGOEnable(convertcgo.get(), GL_CYLINDER_SHADER);
-        CGOFilterOutCylinderOperationsInto(I->preshader, leftOverCGOBorrowed);
-        convertcgo->free_append(CGOConvertShaderCylindersToCylinderShader(
-            I->preshader, convertcgo.get()));
-        CGODisable(convertcgo.get(), GL_CYLINDER_SHADER);
-        CGOStop(convertcgo.get());
-        assert(convertcgo->use_shader);
-      } else {
-        leftOverCGOBorrowed = I->preshader;
-      }
+      leftOverCGOBorrowed = I->preshader;
 
       bool has_spheres_to_optimize =
           CGOHasSphereOperations(leftOverCGOBorrowed);
@@ -212,19 +193,13 @@ void RepCartoon::render(RenderInfo* info) {
     // reaches the rep first (opaque). Drawing transparent geometry there loses
     // the OIT look for that one frame, which strobes while a transparency
     // slider is dragged; CoordSet draws it in the transparent pass instead.
-    if (info->pass == RenderPass::Opaque && I->hasTransparency() && !info->pick)
-      return;
+    if (info->pass == RenderPass::Opaque && I->hasTransparency()) return;
 
     if (I->std && CGOHasOperations(I->std)) {
       assert(!I->preshader);
 
-      if (info->pick) {
-        CGORenderPicking(I->std, info, &I->context, I->cs->Setting.get(),
-                         I->obj->Setting.get());
-      } else {
-        CGORender(I->std, nullptr, I->cs->Setting.get(), I->obj->Setting.get(),
-                  info, I);
-      }
+      CGORender(I->std, nullptr, I->cs->Setting.get(), I->obj->Setting.get(),
+                info, I);
     }
   }
 }

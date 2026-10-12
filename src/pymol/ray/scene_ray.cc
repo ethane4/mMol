@@ -101,7 +101,6 @@ bool SceneRay(PyMOLGlobals* G, int ray_width, int ray_height, int mode,
   std::shared_ptr<pymol::Image> stereo_image;
   OrthoLineType prefix = "";
   int ortho = SettingGetGlobal_i(G, cSetting_ray_orthoscopic);
-  int last_grid_active = I->grid.active;
   int grid_size = 0;
 
   if (SettingGetGlobal_i(G, cSetting_defer_builds_mode) == 5)
@@ -168,11 +167,6 @@ bool SceneRay(PyMOLGlobals* G, int ray_width, int ray_height, int mode,
     GridUpdate(&I->grid, aspRat, grid_mode, grid_size);
     if (I->grid.active) aspRat *= I->grid.asp_adjust;
   }
-  if (last_grid_active != I->grid.active || grid_size != I->last_grid_size) {
-    //    ExecutiveInvalidateRep(G, cKeywordAll, cRepLabel, cRepInvAll);
-    G->ShaderMgr->ResetUniformSet();
-  }
-  I->last_grid_size = grid_size;
   while (1) {
     int slot;
     int tot_width = ray_width;
@@ -653,7 +647,6 @@ bool SceneRay(PyMOLGlobals* G, int ray_width, int ray_height, int mode,
           int parity = 0;
 
           if (I->StereoMode == cStereo_stencil_by_row) {
-            parity = I->StencilParity;
             if (I->rect.bottom & 0x1) parity = 1 - parity;
           }
 
@@ -747,15 +740,4 @@ int SceneDeferRay(PyMOLGlobals* G, int ray_width, int ray_height, int mode,
   };
   OrthoDefer(G, std::move(deferred));
   return 1;
-}
-
-void SceneRenderRayVolume(PyMOLGlobals* G, CScene* I) {
-  glDepthMask(GL_FALSE);
-  glDepthMask(GL_TRUE);
-  glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-  glDepthFunc(GL_ALWAYS);
-  glDepthFunc(GL_LESS);
-  glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-  /* TODO */
 }

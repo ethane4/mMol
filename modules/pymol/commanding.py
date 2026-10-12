@@ -20,8 +20,8 @@ if True:
     import sys
     if True:
         import _thread as thread
-        import urllib.request as urllib2
-        from io import FileIO as file
+        import urllib.request
+        from io import FileIO
 
     import inspect
     import shlex
@@ -84,7 +84,7 @@ if True:
 
     re_fetch = re.compile(r'(\bfetch\s+\w[^;\r\n\'"]+)')
 
-    class LogFile(file):
+    class LogFile(FileIO):
 
         def _append_async0(self, m):
             s = m.group()
@@ -94,7 +94,7 @@ if True:
 
         def write(self, s):
             s = re_fetch.sub(self._append_async0, s)
-            file.write(self, s.encode())
+            FileIO.write(self, s.encode())
 
     def log_open(filename='log.pml', mode='w', _self=cmd):
         '''"log_open" opens a log file for writing.
@@ -243,7 +243,7 @@ if True:
 
         if url:
             try:
-                handle = urllib2.urlopen(url)
+                handle = urllib.request.urlopen(url)
                 contents = handle.read()
                 handle.close()
 

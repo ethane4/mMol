@@ -811,24 +811,19 @@ static float repCapDepth(const float* P, float repClipFront) {
   return 0.5f * (cz / cw + 1.0f);  // GL NDC [-1,1] -> window [0,1]
 }
 
-void RendererMetal::drawVBO(PrimitiveType mode, int vertexCount, const void* data, size_t dataSize,
-                            size_t stride, int posOffset, int normalOffset, int colorOffset,
-                            int colorType, int interiorCap) {
-  if (!data || dataSize == 0 || vertexCount <= 0) return;
-  ensureEncoder();
-  if (!_encoder) return;
+// Reuses the cached Metal buffer for a CPU data pointer, or creates one.
+id<MTLBuffer> RendererMetal::cachedVBOBuffer(const void* data, size_t size) {
+  auto it = _vboCache.find(data);
+  if (it != _vboCache.end()) return it->second;
+  id<MTLBuffer> buf = [_device newBufferWithBytes:data
+                                           length:size
+                                          options:MTLResourceStorageModeShared];
+  if (buf) _vboCache[data] = buf;
+  return buf;
+}
 
-  // Reuse cached Metal buffer if same data pointer, otherwise create new
-  id<MTLBuffer> vbo = nil;
-  auto cacheIt = _vboCache.find(data);
-  if (cacheIt != _vboCache.end()) {
-    vbo = cacheIt->second;
-  } else {
-    vbo = [_device newBufferWithBytes:data length:dataSize options:MTLResourceStorageModeShared];
-    if (!vbo) return;
-    _vboCache[data] = vbo;
-  }
-
+bool RendererMetal::bindVBODraw(id<MTLBuffer> vbo, size_t stride, int posOffset, int normalOffset,
+                                int colorOffset, int colorType, bool unlit, VBOUniforms& u) {
   // Build a vertex descriptor matching the VBO layout
   MTLVertexDescriptor* vd = [MTLVertexDescriptor vertexDescriptor];
 
@@ -857,24 +852,10 @@ void RendererMetal::drawVBO(PrimitiveType mode, int vertexCount, const void* dat
   vd.layouts[0].stride = static_cast<NSUInteger>(stride);
   vd.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
 
-  // Build a pipeline for this specific layout. For common layouts, reuse
-  // pre-built pipelines. Lines/ribbon (no normal) and dots (Points) must use
-  // the unlit flat-color + point-size shader, so they skip the prebuilt
-  // (lit) pipelines even when their interleaved layout happens to match.
-  bool unlit = (normalOffset < 0) || (mode == PrimitiveType::Points);
   // Uniform-colored geometry (no per-vertex color attribute): use the
   // position-only flat shader so the pipeline can be created (the normal unlit
   // shader needs attribute 2). Color comes from a uniform (buffer 2) below.
   bool flat = unlit && (colorOffset < 0);
-
-  // Anti-aliased lines: in the normal (non-OIT) pass, expand line segments on
-  // the CPU into feathered screen-space quads instead of drawing 1px
-  // MTLPrimitiveTypeLine. Lines are skipped in the transparent pass.
-  if ((mode == PrimitiveType::Lines || mode == PrimitiveType::LineStrip) && !_oitActive) {
-    bool flatLine = (colorOffset < 0);
-    drawLinesAA(mode, vertexCount, data, stride, posOffset, colorOffset, colorType, flatLine);
-    return;
-  }
 
   id<MTLRenderPipelineState> pipeline = nil;
 
@@ -896,10 +877,10 @@ void RendererMetal::drawVBO(PrimitiveType mode, int vertexCount, const void* dat
   // pipeline for non-standard lit layouts (e.g. surface stride 44). Unlit
   // geometry (lines/dots) is skipped in the transparent pass.
   if (_oitActive && !pipeline) {
-    if (unlit) return;
+    if (unlit) return false;
     pipeline = cachedVBOPipeline(VBOPipelineVariant::Oit, stride, posOffset, normalOffset,
                                  colorOffset, colorType, vd);
-    if (!pipeline) return;
+    if (!pipeline) return false;
   }
 
   // Fallback for a non-prebuilt opaque layout: build-once via the layout cache.
@@ -911,7 +892,7 @@ void RendererMetal::drawVBO(PrimitiveType mode, int vertexCount, const void* dat
     pipeline = cachedVBOPipeline(v, stride, posOffset, normalOffset, colorOffset, colorType, vd);
   }
 
-  if (!pipeline) return;
+  if (!pipeline) return false;
 
   [_encoder setRenderPipelineState:pipeline];
 
@@ -929,20 +910,14 @@ void RendererMetal::drawVBO(PrimitiveType mode, int vertexCount, const void* dat
   [_encoder setVertexBuffer:vbo offset:0 atIndex:0];
 
   // Upload modelview, projection matrices, and point size as uniforms
-  struct {
-    float modelview[16];
-    float projection[16];
-    float pointSize;
-    float _pad[3];
-  } uniforms;
-  std::memcpy(uniforms.modelview, _modelviewMatrix.data(), 64);
-  std::memcpy(uniforms.projection, _projectionMatrix.data(), 64);
-  uniforms.pointSize = _pointSize > 0.0f ? _pointSize : 1.0f;
-  uniforms._pad[0] = uniforms._pad[1] = uniforms._pad[2] = 0.0f;
-  [_encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
+  std::memcpy(u.modelview, _modelviewMatrix.data(), 64);
+  std::memcpy(u.projection, _projectionMatrix.data(), 64);
+  u.pointSize = _pointSize > 0.0f ? _pointSize : 1.0f;
+  u._pad[0] = u._pad[1] = u._pad[2] = 0.0f;
+  [_encoder setVertexBytes:&u length:sizeof(u) atIndex:1];
   // Lighting (Scene sliders) for the lit vbo_fragment / vbo_fragment_oit at
   // fragment buffer(0). Harmless for the unlit/flat pipelines (they don't read
-  // it). Scoped so the local doesn't clash across multiple draw paths.
+  // it); without it lit geometry reads an unbound LightU and renders black.
   {
     struct {
       float a, d, r, s, sh, klx, kly, klz;
@@ -967,117 +942,139 @@ void RendererMetal::drawVBO(PrimitiveType mode, int vertexCount, const void* dat
     const float flatColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
     [_encoder setVertexBytes:flatColor length:sizeof(flatColor) atIndex:2];
   }
+  return true;
+}
 
-  // Draw
-  [_encoder drawPrimitives:toMTL(mode)
-               vertexStart:0
-               vertexCount:static_cast<NSUInteger>(vertexCount)];
-
-  // --- Surface interior cap (stencil) — non-indexed (opaque surface) path.
-  // MARK the slab's interior cross-section via stencil parity over the surface's
-  // not-clipped faces, then FILL it flat at the near-plane sentinel depth.
-  if (interiorCap && !_oitActive && _capFillPipeline && _capMarkVtxFunc && _capMarkFragFunc) {
-    if (!_capMarkPipeline || _capMarkStride != stride) {
-      MTLVertexDescriptor* mvd = [[MTLVertexDescriptor alloc] init];
-      mvd.attributes[0].format = MTLVertexFormatFloat3;
-      mvd.attributes[0].offset = static_cast<NSUInteger>(posOffset < 0 ? 0 : posOffset);
-      mvd.attributes[0].bufferIndex = 0;
-      mvd.layouts[0].stride = static_cast<NSUInteger>(stride);
-      mvd.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-      MTLRenderPipelineDescriptor* mp = [[MTLRenderPipelineDescriptor alloc] init];
-      mp.vertexFunction = _capMarkVtxFunc;
-      mp.fragmentFunction = _capMarkFragFunc;
-      mp.vertexDescriptor = mvd;
-      mp.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
-      mp.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
-      mp.rasterSampleCount = _sampleCount;
-      mp.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
-      mp.stencilAttachmentPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
-      NSError* me = nil;
-      [_capMarkPipeline release];  // MRC: release the previous-stride pipeline (+1)
-      _capMarkPipeline = [_device newRenderPipelineStateWithDescriptor:mp error:&me];
-      _capMarkStride = stride;
-      if (!_capMarkPipeline) NSLog(@"RendererMetal: cap mark pipeline failed: %@", me);
-      [mvd release];  // MRC: descriptors (+1) consumed by pipeline creation
-      [mp release];
-    }
-    if (_capMarkPipeline) {
-      [_encoder setRenderPipelineState:_capMarkPipeline];
-      [_encoder setDepthStencilState:_capMarkDSS];
-      [_encoder setStencilReferenceValue:1];
-      [_encoder setCullMode:MTLCullModeNone];
-      [_encoder setVertexBuffer:vbo offset:0 atIndex:0];
-      [_encoder setVertexBytes:&uniforms length:sizeof(uniforms) atIndex:1];
-      // Lighting (Scene sliders) for the lit vbo_fragment / vbo_fragment_oit at
-      // fragment buffer(0). Harmless for the unlit/flat pipelines (they don't read
-      // it). Scoped so the local doesn't clash across multiple draw paths.
-      {
-        struct {
-          float a, d, r, s, sh, klx, kly, klz;
-        } _lt = {_lightAmbient,   _lightDirect,    _lightReflect,   _lightSpecular,
-                 _lightShininess, _keyLightEye[0], _keyLightEye[1], _keyLightEye[2]};
-        [_encoder setFragmentBytes:&_lt length:sizeof(_lt) atIndex:0];
-      }
-      // MARK pass: per-rep clip (front-only) so stencil parity marks the cut at
-      // the per-rep front plane; no-op (enabled=0) when per-rep clip is off.
-      {
-        struct {
-          float front, back, enabled, pad;
-        } _capcl = {_repClipFront, 1e6f, _repClipFront >= 0.0f ? 1.0f : 0.0f, 0.0f};
-        [_encoder setFragmentBytes:&_capcl length:sizeof(_capcl) atIndex:1];
-      }
-      [_encoder drawPrimitives:toMTL(mode)
-                   vertexStart:0
-                   vertexCount:static_cast<NSUInteger>(vertexCount)];
-      [_encoder setRenderPipelineState:_capFillPipeline];
-      [_encoder setDepthStencilState:_capFillDSS];
-      {
-        float capDepth = repCapDepth(_projectionMatrix.data(), _repClipFront);
-        [_encoder setVertexBytes:&capDepth length:sizeof(capDepth) atIndex:0];
-      }
-      const float interior[4] = {_capColorOverride ? _capColor[0] : 0.32f,
-                                 _capColorOverride ? _capColor[1] : 0.32f,
-                                 _capColorOverride ? _capColor[2] : 0.36f, 1.0f};
-      [_encoder setFragmentBytes:interior length:sizeof(interior) atIndex:0];
-      [_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-      [_encoder setCullMode:_cullFaceEnabled ? MTLCullModeBack : MTLCullModeNone];
-      applyDepthStencilState();
-      if (_depthStencilState) [_encoder setDepthStencilState:_depthStencilState];
-    }
+void RendererMetal::encodeVBODraw(PrimitiveType mode, int count, id<MTLBuffer> ibo) {
+  if (ibo) {
+    [_encoder drawIndexedPrimitives:toMTL(mode)
+                         indexCount:static_cast<NSUInteger>(count)
+                          indexType:MTLIndexTypeUInt32
+                        indexBuffer:ibo
+                  indexBufferOffset:0];
+  } else {
+    [_encoder drawPrimitives:toMTL(mode) vertexStart:0 vertexCount:static_cast<NSUInteger>(count)];
   }
+}
 
-  // Surface outer-contour: stash this surface draw to be rendered into the
-  // coverage mask after the scene (see runPostChain).
+// --- Surface interior cap (stencil) ---
+// For a clipped closed surface with metal_interior_cap on: MARK the slab's
+// interior cross-section (stencil parity over the not-clipped faces), then FILL
+// it with a flat darkened color at the near-plane sentinel depth (which the
+// post passes already exclude from SSAO). Opaque pass only.
+void RendererMetal::drawVBOInteriorCap(PrimitiveType mode, int count, id<MTLBuffer> vbo,
+                                       id<MTLBuffer> ibo, size_t stride, int posOffset,
+                                       const VBOUniforms& u) {
+  if (_oitActive || !_capFillPipeline || !_capMarkVtxFunc || !_capMarkFragFunc) return;
+  if (!_capMarkPipeline || _capMarkStride != stride) {
+    MTLVertexDescriptor* mvd = [[MTLVertexDescriptor alloc] init];
+    mvd.attributes[0].format = MTLVertexFormatFloat3;
+    mvd.attributes[0].offset = static_cast<NSUInteger>(posOffset < 0 ? 0 : posOffset);
+    mvd.attributes[0].bufferIndex = 0;
+    mvd.layouts[0].stride = static_cast<NSUInteger>(stride);
+    mvd.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+    MTLRenderPipelineDescriptor* mp = [[MTLRenderPipelineDescriptor alloc] init];
+    mp.vertexFunction = _capMarkVtxFunc;
+    mp.fragmentFunction = _capMarkFragFunc;
+    mp.vertexDescriptor = mvd;
+    mp.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+    mp.colorAttachments[0].writeMask = MTLColorWriteMaskNone;  // stencil only
+    mp.rasterSampleCount = _sampleCount;
+    mp.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
+    mp.stencilAttachmentPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
+    NSError* me = nil;
+    [_capMarkPipeline release];  // MRC: release the previous-stride pipeline (+1)
+    _capMarkPipeline = [_device newRenderPipelineStateWithDescriptor:mp error:&me];
+    _capMarkStride = stride;
+    if (!_capMarkPipeline) NSLog(@"RendererMetal: cap mark pipeline failed: %@", me);
+    [mvd release];  // MRC: descriptors (+1) consumed by pipeline creation
+    [mp release];
+  }
+  if (!_capMarkPipeline) return;
+  [_encoder setRenderPipelineState:_capMarkPipeline];
+  [_encoder setDepthStencilState:_capMarkDSS];
+  [_encoder setStencilReferenceValue:1];
+  [_encoder setCullMode:MTLCullModeNone];
+  [_encoder setVertexBuffer:vbo offset:0 atIndex:0];
+  [_encoder setVertexBytes:&u length:sizeof(u) atIndex:1];
+  // MARK pass: per-rep clip (front-only) so stencil parity marks the cut at
+  // the per-rep front plane; no-op (enabled=0) when per-rep clip is off.
+  {
+    struct {
+      float front, back, enabled, pad;
+    } _capcl = {_repClipFront, 1e6f, _repClipFront >= 0.0f ? 1.0f : 0.0f, 0.0f};
+    [_encoder setFragmentBytes:&_capcl length:sizeof(_capcl) atIndex:1];
+  }
+  encodeVBODraw(mode, count, ibo);
+  [_encoder setRenderPipelineState:_capFillPipeline];
+  [_encoder setDepthStencilState:_capFillDSS];
+  {
+    float capDepth = repCapDepth(_projectionMatrix.data(), _repClipFront);
+    [_encoder setVertexBytes:&capDepth length:sizeof(capDepth) atIndex:0];
+  }
+  const float interior[4] = {_capColorOverride ? _capColor[0] : 0.32f,
+                             _capColorOverride ? _capColor[1] : 0.32f,
+                             _capColorOverride ? _capColor[2] : 0.36f, 1.0f};  // darkened
+  [_encoder setFragmentBytes:interior length:sizeof(interior) atIndex:0];
+  [_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+  // Restore default state for subsequent geometry.
+  [_encoder setCullMode:_cullFaceEnabled ? MTLCullModeBack : MTLCullModeNone];
+  applyDepthStencilState();
+  if (_depthStencilState) [_encoder setDepthStencilState:_depthStencilState];
+}
+
+void RendererMetal::recordVBOCoverage(id<MTLBuffer> vbo, id<MTLBuffer> ibo, int count,
+                                      size_t stride, int posOffset) {
+  if (!_repContourEnabled && !_repAOExempt) return;
+  CoverageDraw cd;
+  cd.vbo = vbo;
+  cd.ibo = ibo;
+  cd.count = count;
+  cd.stride = stride;
+  cd.posOffset = posOffset;
+  std::memcpy(cd.modelview, _modelviewMatrix.data(), 64);
+  std::memcpy(cd.projection, _projectionMatrix.data(), 64);
+  cd.clipFront = _repClipFront;
+  cd.clipBack = _repClipBack;
+  // Surface outer-contour: rendered into the coverage mask after the scene
+  // (see runPostChain).
   if (_repContourEnabled) {
-    CoverageDraw cd;
-    cd.vbo = vbo;
-    cd.ibo = nil;
-    cd.count = vertexCount;
-    cd.stride = stride;
-    cd.posOffset = posOffset;
-    std::memcpy(cd.modelview, _modelviewMatrix.data(), 64);
-    std::memcpy(cd.projection, _projectionMatrix.data(), 64);
-    cd.clipFront = _repClipFront;
-    cd.clipBack = _repClipBack;
     _coverageDraws.push_back(cd);
     _contourActive = true;
   }
+  // Per-rep AO exemption (#79): cartoon/ribbon draws rasterized into the
+  // AO-exempt mask after the scene (see renderAOExemptMask).
+  if (_repAOExempt) _aoExemptDraws.push_back(cd);
+}
 
-  // Per-rep AO exemption (#79): stash this cartoon/ribbon draw to be
-  // rasterized into the AO-exempt mask after the scene (see renderAOExemptMask).
-  if (_repAOExempt) {
-    CoverageDraw cd;
-    cd.vbo = vbo;
-    cd.ibo = nil;
-    cd.count = vertexCount;
-    cd.stride = stride;
-    cd.posOffset = posOffset;
-    std::memcpy(cd.modelview, _modelviewMatrix.data(), 64);
-    std::memcpy(cd.projection, _projectionMatrix.data(), 64);
-    cd.clipFront = _repClipFront;
-    cd.clipBack = _repClipBack;
-    _aoExemptDraws.push_back(cd);
+void RendererMetal::drawVBO(PrimitiveType mode, int vertexCount, const void* data, size_t dataSize,
+                            size_t stride, int posOffset, int normalOffset, int colorOffset,
+                            int colorType, int interiorCap) {
+  if (!data || dataSize == 0 || vertexCount <= 0) return;
+  ensureEncoder();
+  if (!_encoder) return;
+
+  id<MTLBuffer> vbo = cachedVBOBuffer(data, dataSize);
+  if (!vbo) return;
+
+  // Anti-aliased lines: in the normal (non-OIT) pass, expand line segments on
+  // the CPU into feathered screen-space quads instead of drawing 1px
+  // MTLPrimitiveTypeLine. Lines are skipped in the transparent pass.
+  if ((mode == PrimitiveType::Lines || mode == PrimitiveType::LineStrip) && !_oitActive) {
+    bool flatLine = (colorOffset < 0);
+    drawLinesAA(mode, vertexCount, data, stride, posOffset, colorOffset, colorType, flatLine);
+    return;
   }
+
+  // Lines/ribbon (no normal) and dots (Points) use the unlit flat-color +
+  // point-size shader, even when their interleaved layout matches a prebuilt
+  // (lit) pipeline.
+  bool unlit = (normalOffset < 0) || (mode == PrimitiveType::Points);
+  VBOUniforms u;
+  if (!bindVBODraw(vbo, stride, posOffset, normalOffset, colorOffset, colorType, unlit, u)) return;
+  encodeVBODraw(mode, vertexCount, nil);
+  if (interiorCap) drawVBOInteriorCap(mode, vertexCount, vbo, nil, stride, posOffset, u);
+  recordVBOCoverage(vbo, nil, vertexCount, stride, posOffset);
 }
 
 void RendererMetal::drawVBOIndexed(PrimitiveType mode, int indexCount, const void* vertexData,
@@ -1089,235 +1086,16 @@ void RendererMetal::drawVBOIndexed(PrimitiveType mode, int indexCount, const voi
   ensureEncoder();
   if (!_encoder) return;
 
-  // Reuse cached Metal buffers
-  id<MTLBuffer> vbo = nil;
-  auto vboIt = _vboCache.find(vertexData);
-  if (vboIt != _vboCache.end()) {
-    vbo = vboIt->second;
-  } else {
-    vbo = [_device newBufferWithBytes:vertexData
-                               length:vertexDataSize
-                              options:MTLResourceStorageModeShared];
-    if (vbo) _vboCache[vertexData] = vbo;
-  }
-  id<MTLBuffer> ibo = nil;
-  auto iboIt = _vboCache.find(indexData);
-  if (iboIt != _vboCache.end()) {
-    ibo = iboIt->second;
-  } else {
-    ibo = [_device newBufferWithBytes:indexData
-                               length:indexDataSize
-                              options:MTLResourceStorageModeShared];
-    if (ibo) _vboCache[indexData] = ibo;
-  }
+  id<MTLBuffer> vbo = cachedVBOBuffer(vertexData, vertexDataSize);
+  id<MTLBuffer> ibo = cachedVBOBuffer(indexData, indexDataSize);
   if (!vbo || !ibo) return;
 
-  // Build vertex descriptor
-  MTLVertexDescriptor* vd = [MTLVertexDescriptor vertexDescriptor];
-  if (posOffset >= 0) {
-    vd.attributes[0].format = MTLVertexFormatFloat3;
-    vd.attributes[0].offset = static_cast<NSUInteger>(posOffset);
-    vd.attributes[0].bufferIndex = 0;
-  }
-  if (normalOffset >= 0) {
-    vd.attributes[1].format = MTLVertexFormatFloat3;
-    vd.attributes[1].offset = static_cast<NSUInteger>(normalOffset);
-    vd.attributes[1].bufferIndex = 0;
-  }
-  if (colorOffset >= 0) {
-    vd.attributes[2].format =
-        (colorType == 0) ? MTLVertexFormatUChar4Normalized : MTLVertexFormatFloat4;
-    vd.attributes[2].offset = static_cast<NSUInteger>(colorOffset);
-    vd.attributes[2].bufferIndex = 0;
-  }
-  vd.layouts[0].stride = static_cast<NSUInteger>(stride);
-  vd.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-
-  // Select or create pipeline (same logic as drawVBO)
-  id<MTLRenderPipelineState> pipeline = nil;
   bool unlit = (normalOffset < 0);
-  bool flat = unlit && (colorOffset < 0);  // uniform-colored: position-only shader
-  if (!unlit && posOffset == 0 && normalOffset == 12 && colorOffset == 24) {
-    if (_oitActive) {
-      if (colorType == 0 && stride == 28)
-        pipeline = _vboOitPipelineUByte;
-      else if (colorType == 1 && stride == 40)
-        pipeline = _vboOitPipelineFloat;
-    } else if (colorType == 0 && stride == 28 && _vboPipelineUByte) {
-      pipeline = _vboPipelineUByte;
-    } else if (colorType == 1 && stride == 40 && _vboPipelineFloat) {
-      pipeline = _vboPipelineFloat;
-    }
-  }
-  if (_oitActive && !pipeline) {
-    if (unlit) return;
-    pipeline = cachedVBOPipeline(VBOPipelineVariant::Oit, stride, posOffset, normalOffset,
-                                 colorOffset, colorType, vd);
-    if (!pipeline) return;
-  }
-  // Fallback for a non-prebuilt opaque layout: build-once via the layout cache.
-  if (!pipeline) {
-    VBOPipelineVariant v = flat ? VBOPipelineVariant::UnlitFlat
-                                : (unlit ? VBOPipelineVariant::Unlit : VBOPipelineVariant::Lit);
-    pipeline = cachedVBOPipeline(v, stride, posOffset, normalOffset, colorOffset, colorType, vd);
-  }
-  if (!pipeline) return;
-
-  [_encoder setRenderPipelineState:pipeline];
-
-  if (_oitActive) {
-    [_encoder setDepthStencilState:oitDepthState()];
-  } else {
-    applyDepthStencilState();
-    if (_depthStencilState) {
-      [_encoder setDepthStencilState:_depthStencilState];
-    }
-  }
-
-  [_encoder setVertexBuffer:vbo offset:0 atIndex:0];
-
-  struct {
-    float modelview[16];
-    float projection[16];
-    float pointSize;
-    float _pad[3];
-  } matrices;
-  std::memcpy(matrices.modelview, _modelviewMatrix.data(), 64);
-  std::memcpy(matrices.projection, _projectionMatrix.data(), 64);
-  matrices.pointSize = _pointSize > 0.0f ? _pointSize : 1.0f;
-  matrices._pad[0] = matrices._pad[1] = matrices._pad[2] = 0.0f;
-  [_encoder setVertexBytes:&matrices length:sizeof(matrices) atIndex:1];
-  // Lighting (Scene sliders) for the lit vbo_fragment at fragment buffer(0).
-  // Without this, indexed lit geometry (molecular surfaces) reads an unbound
-  // LightU (ambient/direct = 0) and renders black. Mirrors drawVBO.
-  {
-    struct {
-      float a, d, r, s, sh, klx, kly, klz;
-    } _lt = {_lightAmbient,   _lightDirect,    _lightReflect,   _lightSpecular,
-             _lightShininess, _keyLightEye[0], _keyLightEye[1], _keyLightEye[2]};
-    [_encoder setFragmentBytes:&_lt length:sizeof(_lt) atIndex:0];
-  }
-  // Per-rep clip planes for the lit vbo_fragment / vbo_fragment_oit at fragment
-  // buffer(1). enabled=0 (front<0) leaves the rep clipped only by the global slab.
-  {
-    struct {
-      float front, back, enabled, pad;
-    } _cl = {_repClipFront, _repClipBack, _repClipFront >= 0.0f ? 1.0f : 0.0f, 0.0f};
-    [_encoder setFragmentBytes:&_cl length:sizeof(_cl) atIndex:1];
-  }
-
-  // Flat (uniform-colored) geometry reads its color from buffer 2 — see drawVBO.
-  if (flat) {
-    const float flatColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-    [_encoder setVertexBytes:flatColor length:sizeof(flatColor) atIndex:2];
-  }
-
-  [_encoder drawIndexedPrimitives:toMTL(mode)
-                       indexCount:static_cast<NSUInteger>(indexCount)
-                        indexType:MTLIndexTypeUInt32
-                      indexBuffer:ibo
-                indexBufferOffset:0];
-
-  // --- Surface interior cap (stencil) ---
-  // For a clipped closed surface with metal_interior_cap on: MARK the slab's
-  // interior cross-section (stencil parity over the not-clipped faces), then FILL
-  // it with a flat darkened color at the near-plane sentinel depth (which the
-  // post passes already exclude from SSAO). Opaque pass only.
-  if (interiorCap && !_oitActive && _capFillPipeline && _capMarkVtxFunc && _capMarkFragFunc) {
-    if (!_capMarkPipeline || _capMarkStride != stride) {
-      MTLVertexDescriptor* mvd = [[MTLVertexDescriptor alloc] init];
-      mvd.attributes[0].format = MTLVertexFormatFloat3;
-      mvd.attributes[0].offset = static_cast<NSUInteger>(posOffset < 0 ? 0 : posOffset);
-      mvd.attributes[0].bufferIndex = 0;
-      mvd.layouts[0].stride = static_cast<NSUInteger>(stride);
-      mvd.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
-      MTLRenderPipelineDescriptor* mp = [[MTLRenderPipelineDescriptor alloc] init];
-      mp.vertexFunction = _capMarkVtxFunc;
-      mp.fragmentFunction = _capMarkFragFunc;
-      mp.vertexDescriptor = mvd;
-      mp.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
-      mp.colorAttachments[0].writeMask = MTLColorWriteMaskNone;  // stencil only
-      mp.rasterSampleCount = _sampleCount;
-      mp.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
-      mp.stencilAttachmentPixelFormat = MTLPixelFormatDepth32Float_Stencil8;
-      NSError* me = nil;
-      [_capMarkPipeline release];  // MRC: release the previous-stride pipeline (+1)
-      _capMarkPipeline = [_device newRenderPipelineStateWithDescriptor:mp error:&me];
-      _capMarkStride = stride;
-      if (!_capMarkPipeline) NSLog(@"RendererMetal: cap mark pipeline failed: %@", me);
-      [mvd release];  // MRC: descriptors (+1) consumed by pipeline creation
-      [mp release];
-    }
-    if (_capMarkPipeline) {
-      [_encoder setRenderPipelineState:_capMarkPipeline];
-      [_encoder setDepthStencilState:_capMarkDSS];
-      [_encoder setStencilReferenceValue:1];
-      [_encoder setCullMode:MTLCullModeNone];
-      [_encoder setVertexBuffer:vbo offset:0 atIndex:0];
-      [_encoder setVertexBytes:&matrices length:sizeof(matrices) atIndex:1];
-      // MARK pass: per-rep clip (front-only) so stencil parity marks the cut at
-      // the per-rep front plane; no-op (enabled=0) when per-rep clip is off.
-      {
-        struct {
-          float front, back, enabled, pad;
-        } _capcl = {_repClipFront, 1e6f, _repClipFront >= 0.0f ? 1.0f : 0.0f, 0.0f};
-        [_encoder setFragmentBytes:&_capcl length:sizeof(_capcl) atIndex:1];
-      }
-      [_encoder drawIndexedPrimitives:toMTL(mode)
-                           indexCount:static_cast<NSUInteger>(indexCount)
-                            indexType:MTLIndexTypeUInt32
-                          indexBuffer:ibo
-                    indexBufferOffset:0];
-      [_encoder setRenderPipelineState:_capFillPipeline];
-      [_encoder setDepthStencilState:_capFillDSS];
-      {
-        float capDepth = repCapDepth(_projectionMatrix.data(), _repClipFront);
-        [_encoder setVertexBytes:&capDepth length:sizeof(capDepth) atIndex:0];
-      }
-      const float interior[4] = {
-          _capColorOverride ? _capColor[0] : 0.32f, _capColorOverride ? _capColor[1] : 0.32f,
-          _capColorOverride ? _capColor[2] : 0.36f, 1.0f};  // darkened interior
-      [_encoder setFragmentBytes:interior length:sizeof(interior) atIndex:0];
-      [_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
-      // Restore default state for subsequent geometry.
-      [_encoder setCullMode:_cullFaceEnabled ? MTLCullModeBack : MTLCullModeNone];
-      applyDepthStencilState();
-      if (_depthStencilState) [_encoder setDepthStencilState:_depthStencilState];
-    }
-  }
-
-  // Surface outer-contour: stash this surface draw to be rendered into the
-  // coverage mask after the scene (see runPostChain).
-  if (_repContourEnabled) {
-    CoverageDraw cd;
-    cd.vbo = vbo;
-    cd.ibo = ibo;
-    cd.count = indexCount;
-    cd.stride = stride;
-    cd.posOffset = posOffset;
-    std::memcpy(cd.modelview, _modelviewMatrix.data(), 64);
-    std::memcpy(cd.projection, _projectionMatrix.data(), 64);
-    cd.clipFront = _repClipFront;
-    cd.clipBack = _repClipBack;
-    _coverageDraws.push_back(cd);
-    _contourActive = true;
-  }
-
-  // Per-rep AO exemption (#79): stash this cartoon/ribbon draw to be
-  // rasterized into the AO-exempt mask after the scene (see renderAOExemptMask).
-  if (_repAOExempt) {
-    CoverageDraw cd;
-    cd.vbo = vbo;
-    cd.ibo = ibo;
-    cd.count = indexCount;
-    cd.stride = stride;
-    cd.posOffset = posOffset;
-    std::memcpy(cd.modelview, _modelviewMatrix.data(), 64);
-    std::memcpy(cd.projection, _projectionMatrix.data(), 64);
-    cd.clipFront = _repClipFront;
-    cd.clipBack = _repClipBack;
-    _aoExemptDraws.push_back(cd);
-  }
+  VBOUniforms u;
+  if (!bindVBODraw(vbo, stride, posOffset, normalOffset, colorOffset, colorType, unlit, u)) return;
+  encodeVBODraw(mode, indexCount, ibo);
+  if (interiorCap) drawVBOInteriorCap(mode, indexCount, vbo, ibo, stride, posOffset, u);
+  recordVBOCoverage(vbo, ibo, indexCount, stride, posOffset);
 }
 
 void RendererMetal::invalidateVBOCache(uint64_t key) {

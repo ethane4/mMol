@@ -389,27 +389,6 @@ void RayHashSpawn(CRayHashThreadInfo* Thread, int n_thread, int n_total) {
   PAutoUnblock(G, blocked);
 }
 
-static void RayAntiSpawn(CRayAntiThreadInfo* Thread, int n_thread) {
-  int blocked;
-  PyObject* info_list;
-  int a;
-  CRay* I = Thread->ray;
-  PyMOLGlobals* G = I->G;
-
-  blocked = PAutoBlock(G);
-
-  PRINTFB(I->G, FB_Ray, FB_Blather)
-  " Ray: antialiasing with %d threads...\n", n_thread ENDFB(I->G);
-  info_list = PyList_New(n_thread);
-  for (a = 0; a < n_thread; a++) {
-    PyList_SetItem(info_list, a, PyCapsule_New(Thread + a, nullptr, nullptr));
-  }
-  PXDecRef(PYOBJECT_CALLMETHOD(G->P_inst->cmd, "_ray_anti_spawn", "OO",
-                               info_list, G->P_inst->cmd));
-  Py_DECREF(info_list);
-  PAutoUnblock(G, blocked);
-}
-
 int RayHashThread(CRayHashThreadInfo* T) {
   BasisMakeMap(T->basis, T->vert2prim, T->prim, T->n_prim, T->clipBox,
                T->perspective, T->front, T->size_hint);

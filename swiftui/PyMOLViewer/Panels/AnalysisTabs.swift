@@ -16,7 +16,7 @@ extension PyMOLEngine {
     else { return nil }
     runPython(
       "from mmol import tools as _mt\nimport json as _j\n"
-        + "_mt.\(call)(*_j.loads(r'''\(json)'''))")
+        + "_mt.\(call)(*_j.loads(\(pyLiteral(json))))")
     guard let out = FileManager.default.contents(atPath: path) else { return nil }
     return try? JSONDecoder().decode(T.self, from: out)
   }
@@ -32,7 +32,7 @@ extension PyMOLEngine {
   /// Make `expr` the 'sele' selection (empty clears it).
   func selectQuietly(_ expr: String?) {
     let code =
-      expr.map { "_c.select('sele', '''\($0)''', enable=1, quiet=1)" }
+      expr.map { "_c.select('sele', \(pyLiteral($0)), enable=1, quiet=1)" }
       ?? "_c.select('sele', 'none', enable=0, quiet=1)"
     runPython("from pymol import cmd as _c\n" + code)
     syncSequenceSelectionNow()

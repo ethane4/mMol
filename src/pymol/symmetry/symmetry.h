@@ -50,8 +50,6 @@ struct CSymmetry {
   CSymmetry(PyMOLGlobals* G) : G(G), Crystal(G) {};
 };
 
-#ifdef SYM_TO_MAT_LIST_IN_C
-#endif
 PyObject* SymmetryAsPyList(CSymmetry* I);
 CSymmetry* SymmetryNewFromPyList(PyMOLGlobals* G, PyObject* list);
 /// Space-group lookups. They live in Python (pymol.xray), which sits above

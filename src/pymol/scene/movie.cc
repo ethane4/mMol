@@ -1442,8 +1442,6 @@ void MovieDrawViewElem(PyMOLGlobals* G, BlockRect* rect, int frames,
   }
 }
 
-bool CMovie::fastDraw(CGO* orthoCGO) { return true; }
-
 void CMovie::draw(CGO* orthoCGO) {
   PyMOLGlobals* G = m_G;
   CMovie* I = G->Movie;

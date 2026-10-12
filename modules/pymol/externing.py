@@ -23,32 +23,15 @@ if True:
     from glob import glob
     from .cmd import _cmd, exp_path, DEFAULT_SUCCESS, _raising
 
-    from os import getcwd as getcwdu
     import subprocess
-    import sys
 
     def _get_system_clipboard():
-        """Get clipboard contents using platform-native commands."""
+        """Get clipboard contents with pbpaste."""
         try:
-            if sys.platform == 'darwin':
-                result = subprocess.run(['pbpaste'],
-                                        capture_output=True,
-                                        text=True,
-                                        timeout=2)
-            elif sys.platform.startswith('linux'):
-                result = subprocess.run(
-                    ['xclip', '-selection', 'clipboard', '-o'],
-                    capture_output=True,
-                    text=True,
-                    timeout=2)
-            elif sys.platform == 'win32':
-                result = subprocess.run(
-                    ['powershell', '-command', 'Get-Clipboard'],
-                    capture_output=True,
-                    text=True,
-                    timeout=2)
-            else:
-                return []
+            result = subprocess.run(['pbpaste'],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=2)
             if result.returncode == 0 and result.stdout:
                 return result.stdout.splitlines()
         except Exception:
@@ -72,7 +55,7 @@ if True:
         try:
             os.chdir(dir)  # raises on error
             if not quiet:
-                print(" cd: now in %s" % getcwdu())
+                print(" cd: now in %s" % os.getcwd())
         except BaseException as e:
             if complain:
                 raise pymol.CmdException(str(e))
@@ -91,7 +74,7 @@ if True:
         --------
         cd, ls, system
         '''
-        print(getcwdu())
+        print(os.getcwd())
         return DEFAULT_SUCCESS
 
     def ls(pattern=None):

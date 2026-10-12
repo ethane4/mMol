@@ -134,7 +134,6 @@ static int RepDotCGOGenerate(RepDot* I) {
 void RepDot::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   float* v = I->V;
   int c = I->N;
   int cc = 0;
@@ -161,38 +160,35 @@ void RepDot::render(RenderInfo* info) {
       cc--;
     }
   } else if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-    } else { /* else not pick, i.e., when rendering */
-      int normals = SettingGet_i(G, I->cs->Setting.get(), I->obj->Setting.get(),
-                                 cSetting_dot_normals);
-      bool const dot_as_spheres = SettingGet<bool>(
-          G, cs->Setting.get(), obj->Setting.get(), cSetting_dot_as_spheres);
+    int normals = SettingGet_i(G, I->cs->Setting.get(), I->obj->Setting.get(),
+                               cSetting_dot_normals);
+    bool const dot_as_spheres = SettingGet<bool>(
+        G, cs->Setting.get(), obj->Setting.get(), cSetting_dot_as_spheres);
 
-      bool const use_shader = SettingGet<bool>(G, cSetting_dot_use_shader) &&
-                              SettingGet<bool>(G, cSetting_use_shaders);
+    bool const use_shader = SettingGet<bool>(G, cSetting_dot_use_shader) &&
+                            SettingGet<bool>(G, cSetting_use_shaders);
 
-      if (I->shaderCGO &&
-          ((!use_shader || CGOCheckWhetherToFree(G, I->shaderCGO)) ||
-           I->shaderCGO_as_spheres != dot_as_spheres)) {
-        CGOFree(I->shaderCGO);
-        I->shaderCGO = 0;
+    if (I->shaderCGO &&
+        ((!use_shader || CGOCheckWhetherToFree(G, I->shaderCGO)) ||
+         I->shaderCGO_as_spheres != dot_as_spheres)) {
+      CGOFree(I->shaderCGO);
+      I->shaderCGO = 0;
+    }
+
+    if (use_shader) {
+      if (!I->shaderCGO) {
+        ok &= RepDotCGOGenerate(I);
       }
 
-      if (use_shader) {
-        if (!I->shaderCGO) {
-          ok &= RepDotCGOGenerate(I);
-        }
-
-        if (ok) {
-          const float* color;
-          color = ColorGet(G, I->obj->Color);
-          CGORender(I->shaderCGO, color, nullptr, nullptr, info, I);
-          return; /* should not do any other rendering after shaderCGO has
-                    been rendered */
-        }
-      } else {
-        // TODO: convert to VBO/shader path
+      if (ok) {
+        const float* color;
+        color = ColorGet(G, I->obj->Color);
+        CGORender(I->shaderCGO, color, nullptr, nullptr, info, I);
+        return; /* should not do any other rendering after shaderCGO has
+                  been rendered */
       }
+    } else {
+      // TODO: convert to VBO/shader path
     }
   }
   if (!ok) {

@@ -22,6 +22,5 @@ struct CoordSet;
 struct RenderInfo;
 
 Rep* RepRibbonNew(CoordSet* cset, int state);
-void RepRibbonRenderImmediate(CoordSet* cs, RenderInfo* info);
 
 #endif

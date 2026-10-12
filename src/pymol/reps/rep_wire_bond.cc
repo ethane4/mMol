@@ -250,13 +250,6 @@ RepWireBond::~RepWireBond() {
   CGOFree(primitiveCGO);
 }
 
-/* lower memory use and higher performance for
-   display of large trajectories, etc. */
-
-void RepWireBondRenderImmediate(CoordSet* cs, RenderInfo* info) {
-  /* immediate mode rendering removed — use shader path instead */
-}
-
 static int RepWireBondCGOGenerate(RepWireBond* I, RenderInfo* info) {
   PyMOLGlobals* G = I->G;
   CGO* convertcgo = nullptr;
@@ -313,7 +306,6 @@ static int RepWireBondCGOGenerate(RepWireBond* I, RenderInfo* info) {
 void RepWireBond::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   int ok = true;
 
   if (ray) {
@@ -323,25 +315,20 @@ void RepWireBond::render(RenderInfo* info) {
   } else if (G->HaveGUI && G->ValidContext) {
     bool use_shader = SettingGetGlobal_b(G, cSetting_line_use_shader) &&
                       SettingGetGlobal_b(G, cSetting_use_shaders);
-    if (pick) {
-      CGORenderPicking(use_shader ? I->shaderCGO : I->primitiveCGO, info,
-                       &I->context, nullptr, nullptr, I);
-    } else { /* else not pick i.e., when rendering */
-      short line_as_cylinders;
-      line_as_cylinders = SettingGetGlobal_b(G, cSetting_render_as_cylinders) &&
-                          SettingGetGlobal_b(G, cSetting_line_as_cylinders);
-      if (I->shaderCGO &&
-          (!use_shader || (line_as_cylinders ^ I->shaderCGO_has_cylinders))) {
-        CGOFree(I->shaderCGO);
-        I->shaderCGO_has_cylinders = 0;
-      }
-      if (ok) {
-        if (use_shader) {
-          if (!I->shaderCGO) ok &= RepWireBondCGOGenerate(I, info);
-          CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
-        } else {
-          CGORender(I->primitiveCGO, nullptr, nullptr, nullptr, info, I);
-        }
+    short line_as_cylinders;
+    line_as_cylinders = SettingGetGlobal_b(G, cSetting_render_as_cylinders) &&
+                        SettingGetGlobal_b(G, cSetting_line_as_cylinders);
+    if (I->shaderCGO &&
+        (!use_shader || (line_as_cylinders ^ I->shaderCGO_has_cylinders))) {
+      CGOFree(I->shaderCGO);
+      I->shaderCGO_has_cylinders = 0;
+    }
+    if (ok) {
+      if (use_shader) {
+        if (!I->shaderCGO) ok &= RepWireBondCGOGenerate(I, info);
+        CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
+      } else {
+        CGORender(I->primitiveCGO, nullptr, nullptr, nullptr, info, I);
       }
     }
   }

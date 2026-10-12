@@ -8,15 +8,10 @@ file and edits values via set_value() → cmd.set.
 Setting types (pymol.setting): 1 boolean, 2 int, 3 float, 4 float3, 5 color,
 6 string.
 """
-import json
 
 from pymol import cmd
 from mmol import tmp as mmol_tmp
 from pymol import setting as _setting
-
-
-def _path():
-    return mmol_tmp.channel_path('pymol_settings')
 
 
 def catalog():
@@ -38,8 +33,7 @@ def catalog():
             'val': '' if v is None else str(v)
         })
     try:
-        with open(_path(), 'w') as f:
-            f.write(json.dumps(out))
+        mmol_tmp.write_json('pymol_settings', out)
         print('SETTINGS:ready')
     except Exception as e:
         print('SETTINGS:err ' + str(e))

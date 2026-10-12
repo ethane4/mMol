@@ -22,6 +22,8 @@ Z* -------------------------------------------------------------------
 
 #include "pymol/base/err.h"
 #include "pymol/reps/rep_dihedral.h"
+#include "pymol/reps/rep_dash_internal.h"
+#include "pymol/objects/object_dist.h"
 #include "pymol/color/color.h"
 #include "pymol/scene/scene.h"
 #include "pymol/app/main.h"
@@ -32,237 +34,11 @@ Z* -------------------------------------------------------------------
 #include "pymol/graphics/cgo.h"
 #include "pymol/objects/coord_set.h"
 
-struct RepDihedral : Rep {
-  using Rep::Rep;
-
-  ~RepDihedral() override;
-
+struct RepDihedral : RepDashLines {
+  RepDihedral(pymol::CObject* obj, int state)
+      : RepDashLines(obj, state, cSetting_dihedral_color) {}
   cRep_t type() const override { return cRepDihedral; }
-  void render(RenderInfo* info) override;
-
-  float* V = nullptr;
-  int N = 0;
-  DistSet* ds;
-  float linewidth, radius;
-  CGO* shaderCGO = nullptr;
 };
-
-#include "pymol/objects/object_dist.h"
-
-RepDihedral::~RepDihedral() {
-  auto I = this;
-  if (I->shaderCGO) {
-    CGOFree(I->shaderCGO);
-    I->shaderCGO = 0;
-  }
-  VLAFreeP(I->V);
-}
-
-static int RepDihedralCGOGenerate(RepDihedral* I, RenderInfo* info) {
-  PyMOLGlobals* G = I->G;
-  float* v = I->V;
-  int c = I->N;
-  float line_width;
-  int ok = true;
-  CGO* convertcgo = nullptr;
-  short dash_as_cylinders = 0;
-  int color = SettingGet_color(G, nullptr, I->ds->Obj->Setting.get(),
-                               cSetting_dihedral_color);
-  I->linewidth = line_width =
-      SettingGet_f(G, nullptr, I->ds->Obj->Setting.get(), cSetting_dash_width);
-  I->radius =
-      SettingGet_f(G, nullptr, I->ds->Obj->Setting.get(), cSetting_dash_radius);
-
-  line_width = SceneGetDynamicLineWidth(info, line_width);
-
-  dash_as_cylinders = SettingGetGlobal_b(G, cSetting_render_as_cylinders) &&
-                      SettingGetGlobal_b(G, cSetting_dash_as_cylinders);
-
-  if (ok) ok &= CGOSpecial(I->shaderCGO, LINEWIDTH_DYNAMIC_WITH_SCALE_DASH);
-  if (ok) ok &= CGOResetNormal(I->shaderCGO, true);
-
-  if (ok) {
-    if (color < 0) {
-      color = I->getObj()->Color;
-    }
-    if (color >= 0) {
-      ok &= CGOColorv(I->shaderCGO, ColorGet(G, color));
-    }
-  }
-  v = I->V;
-  c = I->N;
-  if (dash_as_cylinders) {
-    float *origin = nullptr, axis[3];
-    while (ok && c > 0) {
-      origin = v;
-      v += 3;
-      axis[0] = v[0] - origin[0];
-      axis[1] = v[1] - origin[1];
-      axis[2] = v[2] - origin[2];
-      v += 3;
-      ok &= (bool)I->shaderCGO->add<cgo::draw::shadercylinder>(origin, axis,
-                                                               1.f, 15);
-      c -= 2;
-    }
-  } else {
-    if (ok) ok &= CGOBegin(I->shaderCGO, GL_LINES);
-    while (ok && c > 0) {
-      ok &= CGOVertexv(I->shaderCGO, v);
-      v += 3;
-      if (ok) ok &= CGOVertexv(I->shaderCGO, v);
-      v += 3;
-      c -= 2;
-    }
-    if (ok) ok &= CGOEnd(I->shaderCGO);
-  }
-
-  if (ok) ok &= CGOStop(I->shaderCGO);
-  if (ok) convertcgo = CGOCombineBeginEnd(I->shaderCGO, 0);
-  CHECKOK(ok, convertcgo);
-  CGOFree(I->shaderCGO);
-  I->shaderCGO = convertcgo;
-  convertcgo = nullptr;
-  if (ok) {
-    if (dash_as_cylinders) {
-      CGO* tmpCGO = CGONew(G);
-      if (ok) ok &= CGOEnable(tmpCGO, GL_CYLINDER_SHADER);
-      if (ok) ok &= CGOSpecial(tmpCGO, CYLINDER_WIDTH_FOR_DISTANCES);
-      convertcgo =
-          CGOConvertShaderCylindersToCylinderShader(I->shaderCGO, tmpCGO);
-      if (ok) ok &= CGOEnable(tmpCGO, GL_DASH_TRANSPARENCY_DEPTH_TEST);
-      if (ok) ok &= CGOAppendNoStop(tmpCGO, convertcgo);
-      if (ok) ok &= CGODisable(tmpCGO, GL_DASH_TRANSPARENCY_DEPTH_TEST);
-      if (ok) ok &= CGODisable(tmpCGO, GL_CYLINDER_SHADER);
-      if (ok) ok &= CGOStop(tmpCGO);
-      CGOFreeWithoutVBOs(convertcgo);
-      convertcgo = tmpCGO;
-    } else {
-      CGO* tmpCGO = CGONew(G);
-      if (ok) ok &= CGOEnable(tmpCGO, GL_DEFAULT_SHADER);
-      if (ok) ok &= CGODisable(tmpCGO, CGO_GL_LIGHTING);
-      convertcgo = CGOOptimizeToVBONotIndexedNoShader(I->shaderCGO);
-      if (ok) ok &= CGOEnable(tmpCGO, GL_DASH_TRANSPARENCY_DEPTH_TEST);
-      if (ok) ok &= CGOAppendNoStop(tmpCGO, convertcgo);
-      if (ok) ok &= CGODisable(tmpCGO, GL_DASH_TRANSPARENCY_DEPTH_TEST);
-      if (ok) ok &= CGODisable(tmpCGO, GL_DEFAULT_SHADER);
-      if (ok) ok &= CGOStop(tmpCGO);
-      CGOFreeWithoutVBOs(convertcgo);
-      convertcgo = tmpCGO;
-    }
-    convertcgo->use_shader = true;
-  }
-  if (convertcgo) {
-    CGOFree(I->shaderCGO);
-    I->shaderCGO = convertcgo;
-  }
-  return ok;
-}
-
-void RepDihedral::render(RenderInfo* info) {
-  auto I = this;
-  CRay* ray = info->ray;
-  auto pick = info->pick;
-  float* v = I->V;
-  int c = I->N;
-  const float* vc;
-  float line_width;
-  int round_ends;
-  int ok = true;
-  int color = SettingGet_color(G, nullptr, I->ds->Obj->Setting.get(),
-                               cSetting_dihedral_color);
-  float dash_transparency = SettingGet_f(G, nullptr, I->ds->Obj->Setting.get(),
-                                         cSetting_dash_transparency);
-  short dash_transparency_enabled;
-  if (color < 0) color = getObj()->Color;
-  dash_transparency =
-      (dash_transparency < 0.f
-           ? 0.f
-           : (dash_transparency > 1.f ? 1.f : dash_transparency));
-  dash_transparency_enabled = (dash_transparency > 0.f);
-
-  if (!(ray || pick) &&
-      (info->pass == RenderPass::Antialias ||
-       (info->pass == RenderPass::Opaque) == dash_transparency_enabled))
-    return;
-
-  I->linewidth = line_width =
-      SettingGet_f(G, nullptr, I->ds->Obj->Setting.get(), cSetting_dash_width);
-  I->radius =
-      SettingGet_f(G, nullptr, I->ds->Obj->Setting.get(), cSetting_dash_radius);
-  round_ends = SettingGet_b(G, nullptr, I->ds->Obj->Setting.get(),
-                            cSetting_dash_round_ends);
-
-  line_width = SceneGetDynamicLineWidth(info, line_width);
-
-  if (ray) {
-    float radius;
-
-    if (dash_transparency_enabled) {
-      ray->transparentf(dash_transparency);
-    }
-
-    if (I->radius == 0.0F) {
-      radius = ray->PixelRadius * line_width / 2.0F;
-    } else {
-      radius = I->radius;
-    }
-
-    vc = ColorGet(G, color);
-    v = I->V;
-    c = I->N;
-
-    while (ok && c > 0) {
-      /*      printf("%8.3f %8.3f %8.3f   %8.3f %8.3f %8.3f
-       * \n",v[3],v[4],v[5],v[6],v[7],v[8]); */
-      if (round_ends) {
-        ok &= ray->sausage3fv(v, v + 3, radius, vc, vc);
-      } else {
-        ok &= ray->customCylinder3fv(v, v + 3, radius, vc, vc, cCylCapFlat,
-                                     cCylCapFlat);
-      }
-      v += 6;
-      c -= 2;
-    }
-  } else if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-    } else {
-      short use_shader, generate_shader_cgo = 0;
-
-      use_shader = SettingGetGlobal_b(G, cSetting_dash_use_shader) &
-                   SettingGetGlobal_b(G, cSetting_use_shaders);
-
-      if (!use_shader && I->shaderCGO) {
-        CGOFree(I->shaderCGO);
-        I->shaderCGO = 0;
-      }
-      if (use_shader) {
-        if (!I->shaderCGO) {
-          I->shaderCGO = CGONew(G);
-          CHECKOK(ok, I->shaderCGO);
-          if (ok) I->shaderCGO->use_shader = true;
-          generate_shader_cgo = 1;
-          if (dash_transparency_enabled) {
-            CGOAlpha(I->shaderCGO, 1.f - dash_transparency);
-          }
-          ok &= RepDihedralCGOGenerate(I, info);
-        } else {
-          CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
-          return;
-        }
-      }
-      if (use_shader) {
-        if (ok) {
-          CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
-        }
-      }
-    }
-  }
-  if (!ok) {
-    CGOFree(I->shaderCGO);
-    I->ds->Rep[cRepDihedral] = nullptr;
-    delete I;
-  }
-}
 
 Rep* RepDihedralNew(DistSet* ds, int state) {
   PyMOLGlobals* G = ds->G;
@@ -305,7 +81,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
     float dihedral_size = SettingGet_f(G, nullptr, ds->Obj->Setting.get(),
                                        cSetting_dihedral_size);
 
-    I->V = VLAlloc(float, ds->NDihedralIndex * 10);
+    I->V.resize(ds->NDihedralIndex * 10);
     CHECKOK(ok, I->V);
     for (a = 0; ok && a < ds->NDihedralIndex; a = a + 6) {
       v1 = ds->DihedralCoord + 3 * a;
@@ -367,7 +143,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
       scale3f(n1, radius, x);
       scale3f(n3, radius, y);
 
-      VLACheck(I->V, float, (n * 3) + 5);
+      I->V.check((n * 3) + 5);
       CHECKOK(ok, I->V);
       if (ok) {
         v = I->V + n * 3;
@@ -376,7 +152,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
         copy3f(a32, v);
         n += 2;
       }
-      if (ok) VLACheck(I->V, float, (n * 3) + 5);
+      if (ok) I->V.check((n * 3) + 5);
       CHECKOK(ok, I->V);
       if (ok) {
         v = I->V + n * 3;
@@ -388,7 +164,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
 
       if (ok && v5[0] != 0.0F) { /* line 1 flag */
 
-        VLACheck(I->V, float, (n * 3) + 5);
+        I->V.check((n * 3) + 5);
         CHECKOK(ok, I->V);
         if (ok) {
           v = I->V + n * 3;
@@ -400,7 +176,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
       }
 
       if (ok && v5[1] != 0.0F) { /* line 2 flag */
-        VLACheck(I->V, float, (n * 3) + 5);
+        I->V.check((n * 3) + 5);
         CHECKOK(ok, I->V);
         if (ok) {
           v = I->V + n * 3;
@@ -412,7 +188,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
       }
 
       if (ok && v5[2] != 0.0F) { /* line 3 flag */
-        VLACheck(I->V, float, (n * 3) + 5);
+        I->V.check((n * 3) + 5);
         CHECKOK(ok, I->V);
         if (ok) {
           v = I->V + n * 3;
@@ -439,7 +215,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
         float cons_pos1, cons_pos2;
 
         while (ok && pos < length) {
-          VLACheck(I->V, float, (n * 3) + 5);
+          I->V.check((n * 3) + 5);
           CHECKOK(ok, I->V);
           if (ok) {
             cons_pos1 = pos;
@@ -470,7 +246,7 @@ Rep* RepDihedralNew(DistSet* ds, int state) {
         }
       }
     }
-    if (ok) VLASize(I->V, float, n * 3);
+    if (ok) I->V.resize(n * 3);
     CHECKOK(ok, I->V);
     I->N = n;
   }

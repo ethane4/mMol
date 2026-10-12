@@ -21,169 +21,26 @@
 #include "pymol/base/feedback.h"
 #include "pymol/objects/object_volume.h"
 #include "pymol/pyconv/pconv.h"
-#include "pymol/scene/scene_picking.h"
 #include "pymol/ui/seeker.h"
 #include "pymol/ui/wizard.h"
 #include "pymol/executive/executive_internal.h"
 
-#define cTempRectSele "_rect"
-#define cLeftButSele "lb"
-
+// GL rectangle picking is gone, so a box never picks atoms; a "set" box still
+// clears the active selection.
 pymol::Result<NetSelect> ExecutiveSelectRect(PyMOLGlobals* G, BlockRect* rect,
                                              int mode) {
-  NetSelect result;
-  pymol::Result<int> selectorResult;
-  int beforeSelected = 0;
-  Multipick smp;
-  char selName[WordLength] = cLeftButSele;
-  char prefix[3] = "";
-  int log_box = 0;
-  const char* sel_mode_kw = "";
-
-  int logging = SettingGet<int>(G, cSetting_logging);
-  if (logging) log_box = SettingGetGlobal_b(G, cSetting_log_box_selections);
-  /*  if(logging==cPLog_pml)
-     strcpy(prefix,"_ "); */
-  smp.x = rect->left;
-  smp.y = rect->bottom;
-  smp.w = rect->right - rect->left;
-  smp.h = rect->top - rect->bottom;
-  SceneMultipick(G, &smp);
-  if (!smp.picked.empty()) {
-    selectorResult =
-        SelectorCreate(G, cTempRectSele, nullptr, nullptr, 1, &smp);
-    if (log_box) SelectorLogSele(G, cTempRectSele);
-    switch (mode) {
-      case cButModeRect:
-        if (mode == cButModeRect) {
-          selectorResult = SelectorCreate(G, cLeftButSele, cTempRectSele,
-                                          nullptr, 1, nullptr);
-          if (log_box) {
-            auto buf2 =
-                pymol::string_format("%scmd.select(\"%s\",\"%s\",enable=1)\n",
-                                     prefix, cLeftButSele, cTempRectSele);
-            PLog(G, buf2, cPLog_no_flush);
-          }
-        }
-        break;
-      case cButModeSeleSetBox:
-      case cButModeSeleAddBox:
-      case cButModeSeleSubBox:
-        ExecutiveGetActiveSeleName(G, selName, true,
-                                   SettingGetGlobal_i(G, cSetting_logging));
-        sel_mode_kw = SceneGetSeleModeKeyword(G);
-        /* intentional omission of break! */
-      case cButModeRectAdd:
-      case cButModeRectSub:
-        beforeSelected =
-            SelectorCountAtoms(G, SelectorTmp{G, selName}.getIndex(), -1);
-        if (SelectorIndexByName(G, selName) >= 0) {
-          if ((mode == cButModeRectAdd) || (mode == cButModeSeleAddBox)) {
-            auto buffer = pymol::string_format("(?%s or %s(%s))", selName,
-                                               sel_mode_kw, cTempRectSele);
-            selectorResult =
-                SelectorCreate(G, selName, buffer.c_str(), nullptr, 0, nullptr);
-            if (log_box) {
-              auto buf2 = pymol::string_format(
-                  "%scmd.select(\"%s\",\"(%s)\",enable=1)\n", prefix, selName,
-                  buffer);
-              PLog(G, buf2, cPLog_no_flush);
-            }
-          } else if ((mode == cButModeRectSub) ||
-                     (mode == cButModeSeleSubBox)) {
-            auto buffer =
-                pymol::string_format("(%s(?%s) and not %s(%s))", sel_mode_kw,
-                                     selName, sel_mode_kw, cTempRectSele);
-            selectorResult =
-                SelectorCreate(G, selName, buffer.c_str(), nullptr, 0, nullptr);
-            if (log_box) {
-              auto buf2 =
-                  pymol::string_format("%scmd.select(\"%s\",\"%s\",enable=1)\n",
-                                       prefix, selName, buffer);
-              PLog(G, buf2, cPLog_no_flush);
-            }
-          } else {
-            auto buffer =
-                pymol::string_format("(%s(?%s))", sel_mode_kw, cTempRectSele);
-            selectorResult =
-                SelectorCreate(G, selName, buffer.c_str(), nullptr, 0, nullptr);
-            if (log_box) {
-              auto buf2 =
-                  pymol::string_format("%scmd.select(\"%s\",\"%s\",enable=1)\n",
-                                       prefix, selName, buffer);
-              PLog(G, buf2, cPLog_no_flush);
-            }
-          }
-        } else {
-          if ((mode == cButModeRectAdd) || (mode == cButModeSeleAddBox)) {
-            auto buffer =
-                pymol::string_format("%s(?%s)", sel_mode_kw, cTempRectSele);
-            selectorResult =
-                SelectorCreate(G, selName, buffer.c_str(), nullptr, 0, nullptr);
-            if (log_box) {
-              auto buf2 =
-                  pymol::string_format("%scmd.select(\"%s\",\"%s\",enable=1)\n",
-                                       prefix, selName, buffer);
-              PLog(G, buf2, cPLog_no_flush);
-            }
-          } else if ((mode == cButModeRectSub) ||
-                     (mode == cButModeSeleSubBox)) {
-            selectorResult =
-                SelectorCreate(G, selName, "(none)", nullptr, 0, nullptr);
-            if (log_box) {
-              auto buf2 = pymol::string_format(
-                  "%scmd.select(\"%s\",\"(none)\",enable=1)\n", prefix,
-                  selName);
-              PLog(G, buf2, cPLog_no_flush);
-            }
-          } else {
-            auto buffer =
-                pymol::string_format("%s(?%s)", sel_mode_kw, cTempRectSele);
-            selectorResult =
-                SelectorCreate(G, selName, buffer.c_str(), nullptr, 0, nullptr);
-            if (log_box) {
-              auto buf2 =
-                  pymol::string_format("%scmd.select(\"%s\",\"%s\",enable=1)\n",
-                                       prefix, selName, buffer);
-              PLog(G, buf2, cPLog_no_flush);
-            }
-          }
-        }
-        if (SettingGetGlobal_b(G, cSetting_auto_show_selections)) {
-          ExecutiveSetObjVisib(G, selName, true, false);
-        }
-        break;
-    }
-    if (log_box) {
-      auto buf2 =
-          pymol::string_format("%scmd.delete(\"%s\")\n", prefix, cTempRectSele);
-      PLog(G, buf2, cPLog_no_flush);
-      PLogFlush(G);
-    }
-    ExecutiveDelete(G, cTempRectSele);
-    WizardDoSelect(G, selName);
-  } else {
-    switch (mode) {
-      case cButModeSeleSetBox: {
-        ObjectNameType name;
-        if (ExecutiveGetActiveSeleName(
-                G, name, false, SettingGetGlobal_i(G, cSetting_logging))) {
-          ExecutiveSetObjVisib(G, name, 0, false);
-          if (SettingGetGlobal_i(G, cSetting_logging)) {
-            auto buf2 = pymol::string_format("cmd.disable('%s')\n", name);
-            PLog(G, buf2, cPLog_no_flush);
-          }
-        }
-      } break;
+  if (mode == cButModeSeleSetBox) {
+    ObjectNameType name;
+    if (ExecutiveGetActiveSeleName(G, name, false,
+                                   SettingGetGlobal_i(G, cSetting_logging))) {
+      ExecutiveSetObjVisib(G, name, 0, false);
+      if (SettingGetGlobal_i(G, cSetting_logging)) {
+        auto buf2 = pymol::string_format("cmd.disable('%s')\n", name);
+        PLog(G, buf2, cPLog_no_flush);
+      }
     }
   }
-  if (selectorResult) {
-    result.currSelected = *selectorResult;
-    result.netSelected = *selectorResult - beforeSelected;
-    return result;
-  } else {
-    return selectorResult.error();
-  }
+  return NetSelect{};
 }
 pymol::Result<> ExecutiveLabel(PyMOLGlobals* G, const char* str1,
                                const char* expr, int quiet, int eval_mode) {

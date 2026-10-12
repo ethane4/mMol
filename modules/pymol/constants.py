@@ -90,7 +90,6 @@ _load2str = {
 }
 
 sanitize_alpha_list_re = re.compile(r"[^a-zA-Z0-9_\'\"\.\-\[\]\,]+")
-nt_hidden_path_re = re.compile(r"\$[\/\\]")
 
 
 def safe_alpha_list_eval(st):

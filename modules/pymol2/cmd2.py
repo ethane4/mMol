@@ -24,7 +24,6 @@ class Cmd:
         # private data
 
         self.color_sc = None
-        self.reaper = None
 
         # deferred initiailization
 
@@ -33,8 +32,6 @@ class Cmd:
         # PRIVATE FUNCTIONS (requiring '_self' as a keyword argument)
 
         # locking.py
-
-        self.reaper = None
 
         if 1:
             # use own locks (for performance)

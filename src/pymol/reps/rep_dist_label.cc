@@ -72,7 +72,6 @@ void RepDistLabel::render(RenderInfo* info) {
   auto I = this;
   auto* obj = getObj();
   CRay* ray = info->ray;
-  auto pick = info->pick;
   float* v = I->V;
   int c = I->N;
   DistLabel* l = I->L;
@@ -116,108 +115,71 @@ void RepDistLabel::render(RenderInfo* info) {
       n++;
     }
   } else if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-      if (I->shaderCGO) {
-        if (float_text) glDisable(GL_DEPTH_TEST);
-        CGORenderPicking(I->shaderCGO, info, &I->context, nullptr, nullptr);
-        if (float_text) glEnable(GL_DEPTH_TEST);
-        return;
+    Pickable* p = I->P;
+
+    if (use_shader) {
+      if (!I->shaderCGO) {
+        I->shaderCGO = CGONew(G);
+        CHECKOK(ok, I->shaderCGO);
+        if (ok) {
+          I->shaderCGO->use_shader = true;
+        }
       } else {
-        Pickable* p = I->P;
-        TextSetIsPicking(G, true);
-        SceneSetupGLPicking(G);
-        if (c) {
-          if (float_text) glDisable(GL_DEPTH_TEST);
-
-          while (c--) {
-            if (*l) {
-              TextSetPos(G, v);
-              p++;
-              AssignNewPickColor(nullptr, pick, TextGetColorUChar4uv(G),
-                                 &I->context, p->index, p->bond);
-              TextSetColorFromUColor(G);
-              TextSetLabelBkgrdInfo(G, 1.f, 1.2f, nullptr);
-              TextSetLabelPosIsSet(G, 0);
-              if (!TextRenderOpenGL(G, info, font_id, l[n], font_size, v + 3,
-                                    false, 0, 1, 0)) {
-                TextSetIsPicking(G, false);
-                return;
-              }
-              n++;
-            }
-            v += 6;
-          }
-          if (float_text) glEnable(GL_DEPTH_TEST);
-        }
-        TextSetIsPicking(G, false);
+        info->texture_font_size = I->texture_font_size;
+        CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
+        return;
       }
-    } else {
-      Pickable* p = I->P;
+    } else if (I->shaderCGO) {
+      CGOFree(I->shaderCGO);
+      if (float_text) glDisable(GL_DEPTH_TEST);
+    }
 
-      if (use_shader) {
-        if (!I->shaderCGO) {
-          I->shaderCGO = CGONew(G);
-          CHECKOK(ok, I->shaderCGO);
-          if (ok) {
-            I->shaderCGO->use_shader = true;
-          }
-        } else {
-          info->texture_font_size = I->texture_font_size;
-          CGORender(I->shaderCGO, nullptr, nullptr, nullptr, info, I);
+    TextSetOutlineColor(G, I->OutlineColor);
+    TextSetColor(G, ColorGet(G, color));
+    while (c--) {
+      p++;
+      if (ok && I->shaderCGO)
+        ok &= CGOPickColor(I->shaderCGO, p->index, p->bond);
+      TextSetPos(G, v);
+      TextSetLabelBkgrdInfo(G, 1.f, 1.2f, nullptr);
+      TextSetLabelPosIsSet(G, 0);
+      if (!TextRenderOpenGL(G, info, font_id, l[n], font_size, v + 3, false, 0,
+                            1, SHADERCGO))
+        return;
+      v += 6;
+      n++;
+    }
+    if (ok && I->shaderCGO) {
+      ok &= CGOStop(I->shaderCGO);
+      if (ok) {
+        CGO* tmpCGO = CGONew(G);
+        CGOEnable(tmpCGO, GL_LABEL_SHADER);
+        CGODisable(tmpCGO, GL_DEPTH_TEST_IF_FLOATING);
+        CGOSpecial(tmpCGO, SET_LABEL_SCALE_UNIFORMS);
+        CGO* convertcgo = CGOConvertToLabelShader(I->shaderCGO, tmpCGO);
+        if (!convertcgo) {
+          CGOFree(tmpCGO);
+          CGOFree(I->shaderCGO);
           return;
         }
-      } else if (I->shaderCGO) {
+        CGOAppendNoStop(tmpCGO, convertcgo);
+        CGOFreeWithoutVBOs(convertcgo);
+        CGOEnable(tmpCGO, GL_DEPTH_TEST_IF_FLOATING);
+        CGODisable(tmpCGO, GL_LABEL_SHADER);
+        CGOStop(tmpCGO);
+        convertcgo = tmpCGO;
+        CHECKOK(ok, convertcgo);
         CGOFree(I->shaderCGO);
-        if (float_text) glDisable(GL_DEPTH_TEST);
-      }
-
-      TextSetOutlineColor(G, I->OutlineColor);
-      TextSetColor(G, ColorGet(G, color));
-      while (c--) {
-        p++;
-        if (ok && I->shaderCGO)
-          ok &= CGOPickColor(I->shaderCGO, p->index, p->bond);
-        TextSetPos(G, v);
-        TextSetLabelBkgrdInfo(G, 1.f, 1.2f, nullptr);
-        TextSetLabelPosIsSet(G, 0);
-        if (!TextRenderOpenGL(G, info, font_id, l[n], font_size, v + 3, false,
-                              0, 1, SHADERCGO))
-          return;
-        v += 6;
-        n++;
+        I->shaderCGO = convertcgo;
+        convertcgo = nullptr;
       }
       if (ok && I->shaderCGO) {
-        ok &= CGOStop(I->shaderCGO);
-        if (ok) {
-          CGO* tmpCGO = CGONew(G);
-          CGOEnable(tmpCGO, GL_LABEL_SHADER);
-          CGODisable(tmpCGO, GL_DEPTH_TEST_IF_FLOATING);
-          CGOSpecial(tmpCGO, SET_LABEL_SCALE_UNIFORMS);
-          CGO* convertcgo = CGOConvertToLabelShader(I->shaderCGO, tmpCGO);
-          if (!convertcgo) {
-            CGOFree(tmpCGO);
-            CGOFree(I->shaderCGO);
-            return;
-          }
-          CGOAppendNoStop(tmpCGO, convertcgo);
-          CGOFreeWithoutVBOs(convertcgo);
-          CGOEnable(tmpCGO, GL_DEPTH_TEST_IF_FLOATING);
-          CGODisable(tmpCGO, GL_LABEL_SHADER);
-          CGOStop(tmpCGO);
-          convertcgo = tmpCGO;
-          CHECKOK(ok, convertcgo);
-          CGOFree(I->shaderCGO);
-          I->shaderCGO = convertcgo;
-          convertcgo = nullptr;
-        }
-        if (ok && I->shaderCGO) {
-          I->shaderCGO->use_shader = true;
-          I->render(info);  // recursion !?
-          return;
-        }
+        I->shaderCGO->use_shader = true;
+        I->render(info);  // recursion !?
+        return;
       }
-      if (float_text) glEnable(GL_DEPTH_TEST);
     }
+    if (float_text) glEnable(GL_DEPTH_TEST);
   }
   if (!ok) {
     CGOFree(I->shaderCGO);

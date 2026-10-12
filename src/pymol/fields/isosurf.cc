@@ -32,8 +32,6 @@ Z* -------------------------------------------------------------------
 #include "pymol/platform/main_thread.h"
 #include "pymol/base/util.h"
 
-#define Trace_OFF
-
 #define O3(field, P1, P2, P3, offs) \
   ((field)->get<float>((P1) + offs[0], (P2) + offs[1], (P3) + offs[2]))
 
@@ -365,9 +363,6 @@ static void IsosurfCode(CIsosurf* II, const char* bits1, const char* bits2) {
   }
 
   I->Code[sum1] = sum2;
-#ifdef Trace
-  printf("IsosurfCode: %s (%i) -> %s (%i)\n", bits1, sum1, bits2, sum2);
-#endif
 }
 static CIsosurf* IsosurfNew(PyMOLGlobals* G) {
   int c;
@@ -811,11 +806,6 @@ int IsosurfVolume(PyMOLGlobals* G, CSetting* set1, CSetting* set2,
                           for (c = 0; c < 3; c++)
                             EdgePt(I->Point, x, y, z, c).NLink = 0;
                   }
-#ifdef Trace
-                  for (c = 0; c < 3; c++)
-                    printf(" IsosurfVolume: c: %i CurOff[c]: %i Max[c] %i\n", c,
-                           I->CurOff[c], I->Max[c]);
-#endif
 
                   if (ok) switch (mode) {
                       case cIsomeshMode::isomesh: /* standard mode - want lines
@@ -879,9 +869,6 @@ static int IsosurfAlloc(PyMOLGlobals* G, CIsosurf* II) {
     IsosurfPurge(I);
     ok = false;
   }
-#ifdef Trace
-  printf(" IsosurfAlloc: ok: %i\n", ok);
-#endif
   return (ok);
 }
 static void IsosurfPurge(CIsosurf* II) {
@@ -1510,9 +1497,6 @@ static int IsosurfDrawLines(CIsosurf* II) {
   PointType *Cur, *Start, *Next;
   int MaxLinks, MaxL, Cnt;
   int NLink;
-#ifdef Trace
-  int LCount = 0;
-#endif
 
   for (i = 0; i < I->Max[0]; i++) {
     for (j = 0; j < I->Max[1]; j++) {
@@ -1559,10 +1543,6 @@ static int IsosurfDrawLines(CIsosurf* II) {
                 if (Cnt >= 0) {
                   if (Cnt != NLink) Next->Link[Cnt] = Next->Link[NLink];
                 }
-#ifdef Trace
-                else
-                  printf(" error: IsosurfDrawLines:  can't find double link\n");
-#endif
 
                 Cur = Next;
                 I->Line->check(I->NLine * 3 + 2);
@@ -1573,9 +1553,6 @@ static int IsosurfDrawLines(CIsosurf* II) {
                 *a = *b;
                 I->NLine++;
               } else {
-#ifdef Trace
-                LCount++;
-#endif
                 Cur = nullptr;
                 if (I->NLine != (*I->Num)[I->NSeg]) { /* any new lines? */
                   I->Num->check(I->NSeg + 1);
@@ -1595,9 +1572,6 @@ static int IsosurfDrawLines(CIsosurf* II) {
       break;
     }
   }
-#ifdef Trace
-  if (ok) printf(" DrawLineCount: %i\n", LCount);
-#endif
   return (ok);
 }
 static int IsosurfFindLines(CIsosurf* II) {
@@ -1607,9 +1581,6 @@ static int IsosurfFindLines(CIsosurf* II) {
   int index, cod;
   int Max0m1, Max1m1, Max2m1;
   int skip = I->Skip;
-#ifdef Trace
-  int LCount = 0;
-#endif
   PointType *p1, *p2;
 
   Max0m1 = I->Max[0] - 1;
@@ -1629,10 +1600,6 @@ static int IsosurfFindLines(CIsosurf* II) {
           index = index + I4(I->ActiveEdges, i, j, k, 2);
           if (index) {
             cod = I->Code[index];
-#ifdef Trace
-            if (index && (cod < 0))
-              printf("IsosurfFindLines: bad index: %i \n", index);
-#endif
             while (cod > 0) {
               p1 = nullptr;
               p2 = nullptr;
@@ -1680,9 +1647,6 @@ static int IsosurfFindLines(CIsosurf* II) {
                 p1->NLink++;
                 p2->Link[p2->NLink] = p1;
                 p2->NLink++;
-#ifdef Trace
-                LCount++;
-#endif
               }
             }
           }
@@ -1695,10 +1659,6 @@ static int IsosurfFindLines(CIsosurf* II) {
           index = index + I4(I->ActiveEdges, i, j, k, 1);
           if (index) {
             cod = I->Code[index];
-#ifdef Trace
-            if (index && (cod < 0))
-              printf("IsosurfFindLines: bad index: %i \n", index);
-#endif
             while (cod > 0) {
               switch (cod) {
                 case 40:
@@ -1744,9 +1704,6 @@ static int IsosurfFindLines(CIsosurf* II) {
                 p1->NLink++;
                 p2->Link[p2->NLink] = p1;
                 p2->NLink++;
-#ifdef Trace
-                LCount++;
-#endif
               }
             }
           }
@@ -1759,10 +1716,6 @@ static int IsosurfFindLines(CIsosurf* II) {
           index = index + I4(I->ActiveEdges, i, j, k, 2);
           if (index) {
             cod = I->Code[index];
-#ifdef Trace
-            if (index && (cod < 0))
-              printf("IsosurfFindLines: bad index: %i \n", index);
-#endif
             while (cod > 0) {
               switch (cod) {
                 case 40:
@@ -1808,9 +1761,6 @@ static int IsosurfFindLines(CIsosurf* II) {
                 p1->NLink++;
                 p2->Link[p2->NLink] = p1;
                 p2->NLink++;
-#ifdef Trace
-                LCount++;
-#endif
               }
             }
           }
@@ -1822,18 +1772,12 @@ static int IsosurfFindLines(CIsosurf* II) {
       break;
     }
   }
-#ifdef Trace
-  printf(" IsosurfFindLines: %i lines found\n", LCount);
-#endif
   return (ok);
 }
 static int IsosurfFindActiveEdges(CIsosurf* II) {
   CIsosurf* I = II;
   int i, j, k;
   int ok = true;
-#ifdef Trace
-  int ECount = 0;
-#endif
 
   if (ok) {
     for (i = 0; i < (I->Max[0] - 1); i++) {
@@ -1841,9 +1785,6 @@ static int IsosurfFindActiveEdges(CIsosurf* II) {
         for (k = 0; k < I->Max[2]; k++) {
           if ((I3(I->VertexCodes, i, j, k)) &&
               (!I3(I->VertexCodes, i + 1, j, k))) {
-#ifdef Trace
-            ECount++;
-#endif
             I4(I->ActiveEdges, i, j, k, 0) = 2;
             IsosurfInterpolate(I, O4Ptr(I->Coord, i, j, k, 0, I->CurOff),
                                O3Ptr(I->Data, i, j, k, I->CurOff),
@@ -1852,9 +1793,6 @@ static int IsosurfFindActiveEdges(CIsosurf* II) {
                                &(EdgePt(I->Point, i, j, k, 0).Point[0]));
           } else if (!(I3(I->VertexCodes, i, j, k)) &&
                      (I3(I->VertexCodes, i + 1, j, k))) {
-#ifdef Trace
-            ECount++;
-#endif
             I4(I->ActiveEdges, i, j, k, 0) = 1;
             IsosurfInterpolate(I, O4Ptr(I->Coord, i, j, k, 0, I->CurOff),
                                O3Ptr(I->Data, i, j, k, I->CurOff),
@@ -1877,9 +1815,6 @@ static int IsosurfFindActiveEdges(CIsosurf* II) {
         for (k = 0; k < I->Max[2]; k++) {
           if ((I3(I->VertexCodes, i, j, k)) &&
               (!I3(I->VertexCodes, i, j + 1, k))) {
-#ifdef Trace
-            ECount++;
-#endif
             I4(I->ActiveEdges, i, j, k, 1) = 2;
             IsosurfInterpolate(I, O4Ptr(I->Coord, i, j, k, 0, I->CurOff),
                                O3Ptr(I->Data, i, j, k, I->CurOff),
@@ -1888,9 +1823,6 @@ static int IsosurfFindActiveEdges(CIsosurf* II) {
                                &(EdgePt(I->Point, i, j, k, 1).Point[0]));
           } else if (!(I3(I->VertexCodes, i, j, k)) &&
                      (I3(I->VertexCodes, i, j + 1, k))) {
-#ifdef Trace
-            ECount++;
-#endif
             I4(I->ActiveEdges, i, j, k, 1) = 1;
             IsosurfInterpolate(I, O4Ptr(I->Coord, i, j, k, 0, I->CurOff),
                                O3Ptr(I->Data, i, j, k, I->CurOff),
@@ -1914,9 +1846,6 @@ static int IsosurfFindActiveEdges(CIsosurf* II) {
         for (k = 0; k < (I->Max[2] - 1); k++) {
           if ((I3(I->VertexCodes, i, j, k)) &&
               (!I3(I->VertexCodes, i, j, k + 1))) {
-#ifdef Trace
-            ECount++;
-#endif
             I4(I->ActiveEdges, i, j, k, 2) = 2;
             IsosurfInterpolate(I, O4Ptr(I->Coord, i, j, k, 0, I->CurOff),
                                O3Ptr(I->Data, i, j, k, I->CurOff),
@@ -1925,9 +1854,6 @@ static int IsosurfFindActiveEdges(CIsosurf* II) {
                                &(EdgePt(I->Point, i, j, k, 2).Point[0]));
           } else if (!(I3(I->VertexCodes, i, j, k)) &&
                      (I3(I->VertexCodes, i, j, k + 1))) {
-#ifdef Trace
-            ECount++;
-#endif
             I4(I->ActiveEdges, i, j, k, 2) = 1;
             IsosurfInterpolate(I, O4Ptr(I->Coord, i, j, k, 0, I->CurOff),
                                O3Ptr(I->Data, i, j, k, I->CurOff),
@@ -1945,9 +1871,6 @@ static int IsosurfFindActiveEdges(CIsosurf* II) {
       }
     }
   }
-#ifdef Trace
-  printf(" IsosurfFindActiveEdges: %i active edges found\n", ECount);
-#endif
   return (ok);
 }
 static int IsosurfCodeVertices(CIsosurf* II) {
@@ -1971,10 +1894,6 @@ static int IsosurfCodeVertices(CIsosurf* II) {
       break;
     }
   }
-#ifdef Trace
-  printf(" IsosurfCodeVertices: %i of %i vertices above level\n", VCount,
-         I->CurDim[0] * I->CurDim[1] * I->CurDim[2]);
-#endif
   if (!ok) VCount = 0;
   return (VCount);
 }

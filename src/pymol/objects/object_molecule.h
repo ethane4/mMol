@@ -363,18 +363,6 @@ ObjectMolecule* ObjectMoleculeReadPDBStr(PyMOLGlobals* G, ObjectMolecule* obj,
 
 int ObjectMoleculeExtendIndices(ObjectMolecule* I, int state);
 
-/**
- * Renders the positions of the indicators based for the selection in this
- * object
- * @param I ObjectMolecule whose selections are rendered
- * @param curState current state of the object
- * @param sele selection ID to render
- * @param vis_only only render visible atoms
- * @param selIndicatorsCGO CGO to render the selection indicators
- */
-void ObjectMoleculeRenderSele(ObjectMolecule* I, int curState, int sele,
-                              bool vis_only, CGO& selIndicatorsCGO);
-
 bool ObjectMoleculeSeleOp(ObjectMolecule* I, int sele, ObjectMoleculeOpRec* op);
 
 int ObjectMoleculeMerge(ObjectMolecule* I, pymol::vla<AtomInfoType>&& ai,

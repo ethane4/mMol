@@ -771,102 +771,6 @@ static void RepLabelRenderRay(RepLabel* I, RenderInfo* info) {
   }
 }
 
-void RepLabelPick(RepLabel* I, RenderInfo* info) {
-  auto* G = I->G;
-  auto* pick = info->pick;
-  int pick_labels = SettingGet_b(G, I->cs->Setting.get(), I->obj->Setting.get(),
-                                 cSetting_pick_labels);
-
-  if (!pick_labels) return;
-
-  auto float_text = SettingGet<bool>(
-      G, I->cs->Setting.get(), I->obj->Setting.get(), cSetting_float_labels);
-
-  if (I->shaderCGO) {
-    if (float_text) {
-      glDisable(GL_DEPTH_TEST);
-    }
-    CGORenderPicking(I->shaderCGO, info, &I->context, I->cs->Setting.get(),
-                     I->obj->Setting.get());
-    if (float_text) {
-      glEnable(GL_DEPTH_TEST);
-    }
-    return;
-  }
-  Pickable* p = I->P;
-  TextSetIsPicking(G, true);
-  SceneSetupGLPicking(G);
-  if (I->N == 0) {
-    TextSetIsPicking(G, false);
-  }
-  int screenwidth, screenheight;
-  if (float_text) {
-    glDisable(GL_DEPTH_TEST);
-  }
-
-  if (!I->shaderCGO) {
-    SceneGetWidthHeight(G, &screenwidth, &screenheight);
-  }
-
-  auto font_id = SettingGet<int>(G, I->cs->Setting.get(), I->obj->Setting.get(),
-                                 cSetting_label_font_id);
-  auto font_size = SettingGet<float>(
-      G, I->cs->Setting.get(), I->obj->Setting.get(), cSetting_label_size);
-
-  for (int c = 0; c < I->N; c++) {
-    auto& l = I->L[c];
-    if (l) {
-      float xn[3], yn[3], tCenterPt[3], offpt[3];
-      auto relativeMode = I->labelV[c].getRelativeMode();
-      std::copy_n(I->labelV[c].screen_point, 3, tCenterPt);
-      SceneGetCenter(G, offpt);
-      TextSetPosNColor(G, offpt, I->labelV[c].color);
-      SceneGetScaledAxes(G, I->obj, xn, yn);
-      if (!I->shaderCGO) {
-        if (relativeMode & 2) {  // label_relative_mode = 1
-          float tmp3f[3];
-          mult3f(xn, tCenterPt[0] * screenwidth / 2.f, tmp3f);
-          add3f(tmp3f, offpt, offpt);
-          mult3f(yn, tCenterPt[1] * screenheight / 2.f, tmp3f);
-          add3f(tmp3f, offpt, offpt);
-          copy3f(offpt, tCenterPt);
-        } else if (relativeMode & 4) {  // label_relative_mode = 2
-          float tmp3f[3];
-          mult3f(xn, (tCenterPt[0] - (.5f * screenwidth)), tmp3f);
-          add3f(tmp3f, offpt, offpt);
-          mult3f(yn, (tCenterPt[1] - (.5f * screenheight)), tmp3f);
-          add3f(tmp3f, offpt, offpt);
-          copy3f(offpt, tCenterPt);
-        }
-      }
-      TextSetPosNColor(G, tCenterPt, I->labelV[c].color);
-      TextSetTargetPos(G, I->labelV[c].coord);
-      TextSetLabelBkgrdInfo(G, I->labelV[c].spacing, I->labelV[c].justification,
-                            I->labelV[c].padding);
-
-      if (p) {
-        p++;
-        AssignNewPickColor(nullptr, pick, TextGetColorUChar4uv(G), &I->context,
-                           p->index, p->bond);
-      }
-
-      TextSetColorFromUColor(G);
-
-      auto st = LexStr(G, l);
-      if (!TextRenderOpenGL(G, info, font_id, st, font_size,
-                            I->labelV[c].position, false,
-                            I->labelV[c].getRelativeMode(), 1, I->shaderCGO)) {
-        TextSetIsPicking(G, false);
-        return;
-      }
-    }
-  }
-  if (float_text) {
-    glEnable(GL_DEPTH_TEST);
-  }
-  TextSetIsPicking(G, false);
-}
-
 static void RepLabelGenerateShaderCGO(RepLabel* I, RenderInfo* info) {
   auto* G = I->G;
   CGO* cgo = CGONew(G);
@@ -1017,12 +921,11 @@ void RepLabelRenderShader(RepLabel* I, RenderInfo* info) {
 void RepLabel::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   auto font_id = SettingGet<int>(G, I->cs->Setting.get(), I->obj->Setting.get(),
                                  cSetting_label_font_id);
   auto font_size = SettingGet<float>(
       G, I->cs->Setting.get(), I->obj->Setting.get(), cSetting_label_size);
-  if (!(ray || pick) && info->pass != RenderPass::Transparent) return;
+  if (!ray && info->pass != RenderPass::Transparent) return;
 
   if (I->MaxInvalid >= cRepInvRep) {
     return;
@@ -1046,10 +949,6 @@ void RepLabel::render(RenderInfo* info) {
     return;
   }
   if (!(G->HaveGUI && G->ValidContext)) {
-    return;
-  }
-  if (pick) {
-    RepLabelPick(I, info);
     return;
   }
   RepLabelRenderShader(I, info);

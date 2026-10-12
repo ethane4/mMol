@@ -154,7 +154,7 @@ struct CommandPanel: View {
       return
     }
     if trimmed == "claude" {  // Claude Code in a terminal tab (ClaudeTerminal.swift)
-      engine.feedbackLog.append("mMol>claude")
+      engine.console.lines.append("mMol>claude")
       engine.openClaude()
       commandText = ""
       hint = nil
@@ -299,7 +299,7 @@ private struct ConsoleTextView: NSViewRepresentable {
 // MARK: - Console log text model (macOS)
 
 /// The edit that turns what the console log currently displays into what a new
-/// `feedbackLog` value says it should display.
+/// `console.lines` value says it should display.
 enum ConsoleLogUpdate: Equatable {
   /// Nothing changed.
   case none
@@ -315,7 +315,7 @@ enum ConsoleLogUpdate: Equatable {
   case trimThenAppend(dropCharacters: Int, append: String)
 }
 
-/// Turns `feedbackLog` (an array of lines) into edits for a single text view,
+/// Turns `console.lines` (an array of lines) into edits for a single text view,
 /// and owns the text view those edits land in.
 ///
 /// Split out of `ConsoleTextView` so it can be tested: a test cannot drag-select

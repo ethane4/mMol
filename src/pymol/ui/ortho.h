@@ -132,11 +132,7 @@ ClickSide OrthoGetWrapClickSide(PyMOLGlobals* G);
 float* OrthoGetOverlayColor(PyMOLGlobals* G);
 void OrthoDrawWizardPrompt(PyMOLGlobals* G, CGO* orthoCGO);
 
-void bg_grad(PyMOLGlobals* G);
-std::size_t OrthoGetBackgroundTextureID(PyMOLGlobals* G);
 void OrthoBackgroundTextureNeedsUpdate(PyMOLGlobals* G);
-
-std::pair<int, int> OrthoGetBackgroundSize(const COrtho& ortho);
 
 bool OrthoBackgroundDataIsSet(const COrtho& ortho);
 std::shared_ptr<pymol::Image> OrthoBackgroundDataGet(const COrtho& ortho);
@@ -149,7 +145,6 @@ std::pair<int, int> OrthoGetSize(const COrtho& ortho);
 Extent2D OrthoGetExtent(PyMOLGlobals* G);
 
 void OrthoInvalidateDoDraw(PyMOLGlobals* G);
-void OrthoRenderCGO(PyMOLGlobals* G);
 
 #endif
 

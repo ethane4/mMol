@@ -23,8 +23,6 @@ Z* -------------------------------------------------------------------
 #include "pymol/symmetry/symmetry.h"
 #include "pymol/pyconv/pconv.h"
 #include "pymol/base/result.h"
-#ifdef SYM_TO_MAT_LIST_IN_C
-#endif
 
 PyObject* SymmetryAsPyList(CSymmetry* I) {
   PyObject* result = nullptr;
@@ -83,7 +81,6 @@ CSymmetry* SymmetryNewFromPyList(PyMOLGlobals* G, PyObject* list) {
   return (I);
 }
 
-#ifdef _PYMOL_XRAY
 static void SymmetryDump44f(PyMOLGlobals* G, const float* m,
                             const char* prefix) {
   if (prefix) {
@@ -102,7 +99,6 @@ static void SymmetryDump44f(PyMOLGlobals* G, const float* m,
     PRINTF "%12.5f %12.5f %12.5f %12.5f\n", m[12], m[13], m[14], m[15] ENDF(G);
   }
 }
-#endif
 
 static SymmetrySpaceGroupFns s_space_group{};
 

@@ -30,34 +30,12 @@ struct ListMember {
   int next;
 };
 
-enum class ExecutiveDragMode { Off, Visibility, Reorder, VisibilityWithCamera };
-
-enum class ExecutiveToggleMode {
-  DeferVisibility,
-  ImmediateVisibility,
-  HoverActivate,
-  CenterActivateDeactivatePrevious,
-  ZoomActivateDeactivatePrevious,
-  ZoomExclusiveActivate
-};
-
 struct CExecutive : public Block {
   SpecRec* Spec{};
   CTracker* Tracker{};
-  int Width{}, Height{}, HowFarDown{0};
-  int ScrollBarActive{0};
-  int NSkip{0};
+  int Width{}, Height{};
   ScrollBar m_ScrollBar;
   pymol::CObject* LastEdited{nullptr};
-  ExecutiveDragMode DragMode = ExecutiveDragMode::Off;
-  ExecutiveToggleMode ToggleMode = ExecutiveToggleMode::DeferVisibility;
-  int Pressed{-1}, Over{-1}, LastOver{}, OldVisibility{}, PressedWhat{},
-      OverWhat{};
-  SpecRec *LastChanged{nullptr}, *LastZoomed{nullptr}, *RecoverPressed{nullptr};
-  int ReorderFlag{false};
-  OrthoLineType ReorderLog{};
-  // freeglut has glutLeaveFullScreen, no need to remember window dimensions
-  int oldPX{}, oldPY{}, oldWidth{}, oldHeight{};
   int all_names_list_id{}, all_obj_list_id{}, all_sel_list_id{};
   OVLexicon* Lex{};
   std::unordered_map<ov_word, int> Key;
@@ -70,9 +48,6 @@ struct CExecutive : public Block {
   int CaptureFlag{};
   int LastMotionCount{};
   CGO* selIndicatorsCGO{nullptr};
-  int selectorTexturePosX{0}, selectorTexturePosY{0},
-      selectorTextureAllocatedSize{0}, selectorTextureSize{0};
-  short selectorIsRound{0};
 
   // AtomInfoType::unique_id -> (object, atom-index)
   std::vector<ExecutiveObjectOffset> m_eoo{};  // vector of (object, atom-index)
@@ -84,9 +59,5 @@ struct CExecutive : public Block {
 
   CExecutive(PyMOLGlobals* G) : Block(G), m_ScrollBar(G, false) {};
 
-  int release(int button, int x, int y, int mod) override;
-  int click(int button, int x, int y, int mod) override;
-  int drag(int x, int y, int mod) override;
-  void draw(CGO* orthoCGO) override;
   void reshape(int width, int height) override;
 };

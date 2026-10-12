@@ -852,26 +852,27 @@ struct TimelinePanel: View {
       engine.appendScenesTemplate(secondsPerScene: composerSecPerScene)
     case "states":
       // Open the config modal (mode / model range / duration).
-      let n =
-        composerStatesObject
-        .flatMap { name in engine.multiStateObjects().first { $0.name == name }?.count }
-        ?? engine.maxStateCount
       sheetMode = .sweep
       sheetFirst = 1
-      sheetLast = max(2, n)
+      sheetLast = max(2, composerModelCount)
       sheetDuration = 8
       showStatesSheet = true
     default: break
     }
   }
 
+  /// Models in the composer's "Play models" target (one object, or the most
+  /// any object has).
+  private var composerModelCount: Int {
+    composerStatesObject
+      .flatMap { name in engine.multiStateObjects().first { $0.name == name }?.count }
+      ?? engine.maxStateCount
+  }
+
   // "Play models" configuration modal. Objects come from the composer dropdown;
   // here the user picks the motion, the model range, and the duration.
   private var statesConfigSheet: some View {
-    let n =
-      composerStatesObject
-      .flatMap { name in engine.multiStateObjects().first { $0.name == name }?.count }
-      ?? engine.maxStateCount
+    let n = composerModelCount
     let target = composerStatesObject ?? "all models"
     // Resolve to a valid range regardless of prior state (0/out-of-range → 1…N),
     // and drive both the steppers and Add from the resolved values.
@@ -893,21 +894,22 @@ struct TimelinePanel: View {
       .pickerStyle(.segmented)
       .labelsHidden()
 
-      // Range + duration: one row where it fits, wrapping to two rows when
-      // narrow.
-      ViewThatFits(in: .horizontal) {
-        HStack(spacing: 18) {
-          rangeStart(first, last, n)
-          rangeEnd(first, last, n)
-          rangeDuration()
-        }
-        VStack(alignment: .leading, spacing: 12) {
-          HStack(spacing: 18) {
-            rangeStart(first, last, n)
-            rangeEnd(first, last, n)
-          }
-          rangeDuration()
-        }
+      // Range + duration.
+      HStack(spacing: 18) {
+        Stepper(
+          "Start \(first)",
+          value: Binding(get: { first }, set: { sheetFirst = min($0, last) }),
+          in: 1...max(1, n)
+        ).fixedSize()
+        Stepper(
+          "End \(last)",
+          value: Binding(get: { last }, set: { sheetLast = max($0, first) }),
+          in: 1...max(1, n)
+        ).fixedSize()
+        Stepper(
+          "\(String(format: "%.0f", sheetDuration)) s",
+          value: $sheetDuration, in: 1...30, step: 1
+        ).fixedSize()
       }
 
       HStack(spacing: 10) {
@@ -927,29 +929,6 @@ struct TimelinePanel: View {
     }
     .padding(20)
     .frame(width: 400)
-  }
-
-  // Steppers for the "Play models" modal — reused in the one-row and wrapped
-  // (narrow-phone) layouts so both stay in sync.
-  @ViewBuilder private func rangeStart(_ first: Int, _ last: Int, _ n: Int) -> some View {
-    Stepper(
-      "Start \(first)",
-      value: Binding(get: { first }, set: { sheetFirst = min($0, last) }),
-      in: 1...max(1, n)
-    ).fixedSize()
-  }
-  @ViewBuilder private func rangeEnd(_ first: Int, _ last: Int, _ n: Int) -> some View {
-    Stepper(
-      "End \(last)",
-      value: Binding(get: { last }, set: { sheetLast = max($0, first) }),
-      in: 1...max(1, n)
-    ).fixedSize()
-  }
-  @ViewBuilder private func rangeDuration() -> some View {
-    Stepper(
-      "\(String(format: "%.0f", sheetDuration)) s",
-      value: $sheetDuration, in: 1...30, step: 1
-    ).fixedSize()
   }
 
   // MARK: - Playhead / geometry helpers

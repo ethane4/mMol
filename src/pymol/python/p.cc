@@ -330,7 +330,6 @@ PyObject* P_CmdException = nullptr;
 PyObject* P_QuietException = nullptr;
 PyObject* P_IncentiveOnlyException = nullptr;
 
-#ifdef _PYMOL_XRAY
 /// Space-group operator matrices from pymol.xray, for CSymmetry.
 static bool PSpaceGroupMatrices(PyMOLGlobals* G, const char* sg,
                                 std::vector<float>& mats) {
@@ -357,7 +356,6 @@ static void PSpaceGroupRegister(PyMOLGlobals* G, const char* sg,
   Py_XDECREF(r);
   PAutoUnblock(G, blocked);
 }
-#endif
 
 static PyMappingMethods wrapperMappingMethods, settingMappingMethods;
 static PyTypeObject Wrapper_Type = {
@@ -1049,22 +1047,6 @@ void PUnlockStatus(PyMOLGlobals* G) { /* assumes we have the GIL */
   PXDecRef(PYOBJECT_CALLMETHOD(G->P_inst->lock_api_status, "release", nullptr));
 }
 
-/**
- * Acquire GLUT lock
- * @pre GIL
- */
-static void PLockGLUT(PyMOLGlobals* G) { /* assumes we have the GIL */
-  PXDecRef(PYOBJECT_CALLMETHOD(G->P_inst->lock_api_glut, "acquire", nullptr));
-}
-
-/**
- * Release GLUT lock
- * @pre GIL
- */
-static void PUnlockGLUT(PyMOLGlobals* G) { /* assumes we have the GIL */
-  PXDecRef(PYOBJECT_CALLMETHOD(G->P_inst->lock_api_glut, "release", nullptr));
-}
-
 /* enables us to keep glut out if by chance it grabs the API
  * in the middle of a nested API based operation */
 
@@ -1614,11 +1596,6 @@ void PInit(PyMOLGlobals* G, int global_instance) {
     G->P_inst->unlock = PGetAttrOrFatal(G->P_inst->cmd, "unlock");
     G->P_inst->lock_api_status =
         PGetAttrOrFatal(G->P_inst->cmd, "lock_api_status");
-    G->P_inst->lock_api_glut = PGetAttrOrFatal(G->P_inst->cmd, "lock_api_glut");
-
-    /* 'do' command */
-
-    G->P_inst->cmd_do = PGetAttrOrFatal(G->P_inst->cmd, "do");
 
     /* cache */
     G->P_inst->cache = PyObject_GetAttrString(G->P_inst->obj, "_cache");
@@ -1629,10 +1606,8 @@ void PInit(PyMOLGlobals* G, int global_instance) {
     P_setting = PImportModuleOrFatal("pymol.setting");
     P_povray = PImportModuleOrFatal("pymol.povray");
 
-#ifdef _PYMOL_XRAY
     P_xray = PImportModuleOrFatal("pymol.xray");
     SymmetrySetSpaceGroupFns({PSpaceGroupMatrices, PSpaceGroupRegister});
-#endif
 
     P_parser = PImportModuleOrFatal("pymol.parser");
 
@@ -1785,22 +1760,6 @@ void PExit(PyMOLGlobals* G, int code) {
  */
 void PParse(PyMOLGlobals* G, pymol::zstring_view str_view) {
   OrthoCommandIn(G, str_view.c_str());
-}
-
-/**
- * Call `cmd.do(str)`
- *
- * Effectively calls `PParse(str.splitlines())` with logging and echo.
- */
-void PDo(
-    PyMOLGlobals* G,
-    const char* str) { /* assumes we already hold the re-entrant API lock */
-  int blocked;
-  PyObject* ret;
-  blocked = PAutoBlock(G);
-  ret = PYOBJECT_CALLFUNCTION(G->P_inst->cmd_do, "s", str);
-  Py_XDECREF(ret);
-  PAutoUnblock(G, blocked);
 }
 
 /**

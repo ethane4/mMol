@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make a built macOS RayMol.app self-contained.
+"""Make a built macOS mMol.app self-contained.
 
 The macOS app links freetype/libpng (and any other non-system dylib) out of
 Homebrew (/opt/homebrew). The linker bakes those absolute install names (e.g.
@@ -34,7 +34,7 @@ step 6 DOES verify it (read-only), so a future Homebrew-linked extension there
 would fail the build loudly instead of shipping a crash.
 
 Usage:
-    bundle_macos_dylibs.py <RayMol.app> [--sign-identity ID] [--hardened]
+    bundle_macos_dylibs.py <mMol.app> [--sign-identity ID] [--hardened]
 
     --sign-identity ID  codesign the COPIED Frameworks dylibs with this identity
                         ("-" for ad-hoc). The main binary is intentionally left
@@ -47,7 +47,6 @@ Usage:
 
 import argparse
 import os
-import plistlib
 import re
 import shutil
 import subprocess
@@ -189,22 +188,6 @@ def add_rpath(path, rpath):
     install_name_tool(["-add_rpath", rpath, str(path)])
 
 
-def main_executable(app):
-    """Resolve Contents/MacOS/<CFBundleExecutable> for the bundle."""
-    plist = app / "Contents/Info.plist"
-    name = None
-    if plist.is_file():
-        with open(plist, "rb") as f:
-            name = plistlib.load(f).get("CFBundleExecutable")
-    macos = app / "Contents/MacOS"
-    if name and (macos / name).is_file():
-        return macos / name
-    machos = [p for p in macos.iterdir() if is_macho(p)] if macos.is_dir() else []
-    if len(machos) == 1:
-        return machos[0]
-    raise SystemExit(f"Could not resolve main executable under {macos}")
-
-
 def all_macho(app):
     for root, _dirs, files in os.walk(app):
         for fn in files:
@@ -215,7 +198,7 @@ def all_macho(app):
 
 def macos_machos(app):
     """The app's OWN compiled Mach-Os under Contents/MacOS — the main executable
-    plus, in Xcode debug-dylib builds, RayMol.debug.dylib / __preview.dylib.
+    plus, in Xcode debug-dylib builds, mMol.debug.dylib / __preview.dylib.
     These are the binaries that link Homebrew dylibs and must be scanned and
     rewritten. The embedded CPython tree (Resources/python) is already
     self-contained, so it is intentionally NOT a root here (step 6 still
@@ -250,7 +233,7 @@ def collect(starts):
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("app", type=Path, help="Path to the built RayMol.app")
+    ap.add_argument("app", type=Path, help="Path to the built mMol.app")
     ap.add_argument("--sign-identity", default=None,
                     help='codesign identity for the copied dylibs ("-" = ad-hoc)')
     ap.add_argument("--hardened", action="store_true",
@@ -261,20 +244,18 @@ def main():
     if not (app.is_dir() and app.suffix == ".app"):
         raise SystemExit(f"Not a .app bundle: {app}")
 
-    binary = main_executable(app)
     # Scan ALL of the app's own Mach-Os, not just the (possibly thin) main stub.
     # Xcode's debug-dylib builds put the real code — and its Homebrew
-    # LC_LOAD_DYLIBs — in RayMol.debug.dylib, leaving Contents/MacOS/RayMol a stub
+    # LC_LOAD_DYLIBs — in mMol.debug.dylib, leaving Contents/MacOS/mMol a stub
     # with no copyable deps. Seeding only from the main binary then found nothing
     # to bundle, and the debug dylib's absolute freetype/libpng refs tripped the
     # whole-bundle verify in step 6.
-    roots = macos_machos(app) or [binary]
+    roots = macos_machos(app)
+    if not roots:
+        raise SystemExit(f"No Mach-O executable under {app / 'Contents/MacOS'}")
     fw_dir = app / "Contents/Frameworks"
     print(f"App:        {app}")
-    print(f"Main binary: {binary.relative_to(app)}")
-    others = sorted(p.name for p in roots if p != binary)
-    if others:
-        print(f"Also scanning: {', '.join(others)}")
+    print(f"Scanning:   {', '.join(sorted(p.name for p in roots))}")
 
     # ---- 1. collect -----------------------------------------------------------
     deps = collect(roots)

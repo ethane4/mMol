@@ -53,56 +53,45 @@ RepNonbondedSphere::~RepNonbondedSphere() {
 void RepNonbondedSphere::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
 
   if (ray) {
     CGORenderRay(I->primitiveCGO, ray, info, nullptr, nullptr,
                  I->cs->Setting.get(), I->obj->Setting.get());
   } else if (G->HaveGUI && G->ValidContext) {
-    if (pick) {
-      if (I->shaderCGO) {
-        CGORenderPicking(I->shaderCGO, info, &I->context, I->cs->Setting.get(),
-                         I->obj->Setting.get());
-      } else if (I->primitiveCGO) {
-        CGORenderPicking(I->primitiveCGO, info, &I->context,
-                         I->cs->Setting.get(), I->obj->Setting.get());
-      }
-    } else { /* rendering */
-      short use_shader, use_sphere_shader;
-      use_shader = SettingGetGlobal_i(G, cSetting_nb_spheres_use_shader) &&
-                   SettingGetGlobal_b(G, cSetting_use_shaders);
-      use_sphere_shader =
-          (SettingGetGlobal_i(G, cSetting_nb_spheres_use_shader) == 1) &&
-          SettingGetGlobal_b(G, cSetting_use_shaders);
+    short use_shader, use_sphere_shader;
+    use_shader = SettingGetGlobal_i(G, cSetting_nb_spheres_use_shader) &&
+                 SettingGetGlobal_b(G, cSetting_use_shaders);
+    use_sphere_shader =
+        (SettingGetGlobal_i(G, cSetting_nb_spheres_use_shader) == 1) &&
+        SettingGetGlobal_b(G, cSetting_use_shaders);
 
-      if (I->shaderCGO) {
-        if (!use_shader ||
-            use_sphere_shader ^ I->shaderCGO->has_draw_sphere_buffers) {
-          CGOFree(I->shaderCGO);
-          I->shaderCGO = 0;
-        }
+    if (I->shaderCGO) {
+      if (!use_shader ||
+          use_sphere_shader ^ I->shaderCGO->has_draw_sphere_buffers) {
+        CGOFree(I->shaderCGO);
+        I->shaderCGO = 0;
       }
-      if (use_shader) {
-        if (!I->shaderCGO) {
-          if (use_sphere_shader) {
-            I->shaderCGO =
-                CGOOptimizeSpheresToVBONonIndexed(I->primitiveCGO, 0, true);
-          } else {
-            ok_assert(1, I->shaderCGO = CGOSimplify(
-                             I->primitiveCGO, 0,
-                             SettingGet_i(G, I->cs->Setting.get(),
-                                          I->obj->Setting.get(),
-                                          cSetting_nb_spheres_quality)));
-            ok_assert(1, CGOOptimizeToVBONotIndexed(&I->shaderCGO));
-          }
-          I->shaderCGO->use_shader = true;
+    }
+    if (use_shader) {
+      if (!I->shaderCGO) {
+        if (use_sphere_shader) {
+          I->shaderCGO =
+              CGOOptimizeSpheresToVBONonIndexed(I->primitiveCGO, 0, true);
+        } else {
+          ok_assert(1, I->shaderCGO = CGOSimplify(
+                           I->primitiveCGO, 0,
+                           SettingGet_i(G, I->cs->Setting.get(),
+                                        I->obj->Setting.get(),
+                                        cSetting_nb_spheres_quality)));
+          ok_assert(1, CGOOptimizeToVBONotIndexed(&I->shaderCGO));
         }
-        CGORender(I->shaderCGO, nullptr, I->cs->Setting.get(),
-                  I->obj->Setting.get(), info, I);
-      } else {
-        CGORender(I->primitiveCGO, nullptr, I->cs->Setting.get(),
-                  I->obj->Setting.get(), info, I);
+        I->shaderCGO->use_shader = true;
       }
+      CGORender(I->shaderCGO, nullptr, I->cs->Setting.get(),
+                I->obj->Setting.get(), info, I);
+    } else {
+      CGORender(I->primitiveCGO, nullptr, I->cs->Setting.get(),
+                I->obj->Setting.get(), info, I);
     }
   }
   return;

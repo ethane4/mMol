@@ -153,6 +153,10 @@ void PyMOLBridge_InitPython(PyMOLHandle h, const char *resourcePath) {
   NSString *modulesPath = [resPath stringByAppendingPathComponent:@"modules"];
   NSString *dataPath = [resPath stringByAppendingPathComponent:@"data"];
 
+  // Before init: Python snapshots os.environ at startup.
+  setenv("PYMOL_PATH", [resPath UTF8String], 1);
+  setenv("PYMOL_DATA", [dataPath UTF8String], 1);
+
   // Modern PyConfig boot (mirrors layer5/main_appkit.mm). NOT isolated: PyMOL
   // relies on a normally-populated sys.path + site.py. config.home must be the
   // directory CONTAINING lib/python3.13 (BeeWare layout), i.e. <res>/python.
@@ -180,9 +184,6 @@ void PyMOLBridge_InitPython(PyMOLHandle h, const char *resourcePath) {
     PyList_Insert(sysPath, 0, p);
     Py_DECREF(p);
   }
-
-  setenv("PYMOL_PATH", [resPath UTF8String], 1);
-  setenv("PYMOL_DATA", [dataPath UTF8String], 1);
 
   // _champ is a TOP-LEVEL builtin (inittab), but chempy/champ/__init__.py does
   // `from . import _champ` (i.e. imports chempy.champ._champ). Pre-seed

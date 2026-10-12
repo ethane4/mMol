@@ -1,20 +1,25 @@
 /**
- * GLUT (real or pretended)
+ * GLUT-style constants for the mouse and key events the app forwards
  */
 
 #pragma once
 
-#define _PYMOL_NO_GLUT
+#define P_GLUT_DOWN 0
+#define P_GLUT_UP 1
 
-#ifdef _PYMOL_NO_GLUT
-#define _PYMOL_PRETEND_GLUT
-#endif
+#define P_GLUT_KEY_LEFT 100
+#define P_GLUT_KEY_UP 101
+#define P_GLUT_KEY_RIGHT 102
+#define P_GLUT_KEY_DOWN 103
+#define P_GLUT_KEY_PAGE_UP 104
+#define P_GLUT_KEY_PAGE_DOWN 105
+#define P_GLUT_KEY_HOME 106
+#define P_GLUT_KEY_END 107
+#define P_GLUT_KEY_INSERT 108
 
-#ifndef _PYMOL_PRETEND_GLUT
-#include "pymol/platform/os_gl_glut_real.h"
-#else
-#include "pymol/platform/os_gl_glut_pretend.h"
-#endif
+#define P_GLUT_LEFT_BUTTON 0
+#define P_GLUT_MIDDLE_BUTTON 1
+#define P_GLUT_RIGHT_BUTTON 2
 
 #define P_GLUT_BUTTON_SCROLL_FORWARD 3
 #define P_GLUT_BUTTON_SCROLL_BACKWARD 4

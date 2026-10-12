@@ -78,8 +78,6 @@ void PFree(PyMOLGlobals* G);
 void PExit(PyMOLGlobals* G, int code);
 void PParse(PyMOLGlobals* G,
             pymol::zstring_view str_view); /* only accepts one command */
-void PDo(PyMOLGlobals* G,
-         const char* str); /* accepts multple commands seperated by newlines */
 
 int PAlterAtom(PyMOLGlobals* G, ObjectMolecule* obj, CoordSet* cs,
                PyObject* expr_co, int read_only, int atm, PyObject* space);
@@ -174,9 +172,8 @@ struct _CP_inst {
   PyObject* dict;
   PyObject* exec;
   PyObject* cmd;
-  PyObject* parse;    /* parse closure */
-  PyObject* complete; /* complete partial command / TAB action */
-  PyObject* cmd_do;
+  PyObject* parse;     /* parse closure */
+  PyObject* complete;  /* complete partial command / TAB action */
   PyObject* colortype; /* backwards compatible iterate/alter color type */
 
   PyObject* cache;
@@ -188,7 +185,6 @@ struct _CP_inst {
   PyObject* unlock;
 
   PyObject* lock_api_status; /* status locks */
-  PyObject* lock_api_glut;   /* GLUT locks */
 
   int glut_thread_keep_out;
   SavedThreadRec savedThread[MAX_SAVED_THREAD];

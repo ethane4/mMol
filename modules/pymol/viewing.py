@@ -679,46 +679,44 @@ if True:
         with _self.lockcm:
             r = _cmd.get_view(_self._COb)
 
-        if True:
-            output = int(output)
-            if True:
-                if (_self.get_setting_int("logging") != 0) and (output < 3):
-                    if not quiet:
-                        print(" get_view: matrix written to log file.")
-                    _self.log("_ set_view (\\\n", "cmd.set_view((\\\n")
-                    _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[0:3],
-                              "  %14.9f, %14.9f, %14.9f,\\\n" % r[0:3])
-                    _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[4:7],
-                              "  %14.9f, %14.9f, %14.9f,\\\n" % r[4:7])
-                    _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[8:11],
-                              "  %14.9f, %14.9f, %14.9f,\\\n" % r[8:11])
-                    _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[16:19],
-                              "  %14.9f, %14.9f, %14.9f,\\\n" % r[16:19])
-                    _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[19:22],
-                              "  %14.9f, %14.9f, %14.9f,\\\n" % r[19:22])
-                    _self.log("_  %14.9f, %14.9f, %14.9f )\n" % r[22:25],
-                              "  %14.9f, %14.9f, %14.9f ))\n" % r[22:25])
-                    if output < 2:  # suppress if we have a log file open
-                        output = 0
-                if output and (not quiet) and (output < 3):
-                    print("### cut below here and paste into script ###")
-                    print("set_view (\\")
-                    print("  %14.9f, %14.9f, %14.9f,\\" % r[0:3])
-                    print("  %14.9f, %14.9f, %14.9f,\\" % r[4:7])
-                    print("  %14.9f, %14.9f, %14.9f,\\" % r[8:11])
-                    print("  %14.9f, %14.9f, %14.9f,\\" % r[16:19])
-                    print("  %14.9f, %14.9f, %14.9f,\\" % r[19:22])
-                    print("  %14.9f, %14.9f, %14.9f )" % r[22:25])
-                    print("### cut above here and paste into script ###")
-            if output == 3:
-                return ("set_view (\\\n" +
-                        "  %14.9f, %14.9f, %14.9f,\\\n" % r[0:3] +
-                        "  %14.9f, %14.9f, %14.9f,\\\n" % r[4:7] +
-                        "  %14.9f, %14.9f, %14.9f,\\\n" % r[8:11] +
-                        "  %14.9f, %14.9f, %14.9f,\\\n" % r[16:19] +
-                        "  %14.9f, %14.9f, %14.9f,\\\n" % r[19:22] +
-                        "  %14.9f, %14.9f, %14.9f )\n" % r[22:25])
-            r = r[0:3] + r[4:7] + r[8:11] + r[16:25]
+        output = int(output)
+        if (_self.get_setting_int("logging") != 0) and (output < 3):
+            if not quiet:
+                print(" get_view: matrix written to log file.")
+            _self.log("_ set_view (\\\n", "cmd.set_view((\\\n")
+            _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[0:3],
+                      "  %14.9f, %14.9f, %14.9f,\\\n" % r[0:3])
+            _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[4:7],
+                      "  %14.9f, %14.9f, %14.9f,\\\n" % r[4:7])
+            _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[8:11],
+                      "  %14.9f, %14.9f, %14.9f,\\\n" % r[8:11])
+            _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[16:19],
+                      "  %14.9f, %14.9f, %14.9f,\\\n" % r[16:19])
+            _self.log("_  %14.9f, %14.9f, %14.9f,\\\n" % r[19:22],
+                      "  %14.9f, %14.9f, %14.9f,\\\n" % r[19:22])
+            _self.log("_  %14.9f, %14.9f, %14.9f )\n" % r[22:25],
+                      "  %14.9f, %14.9f, %14.9f ))\n" % r[22:25])
+            if output < 2:  # suppress if we have a log file open
+                output = 0
+        if output and (not quiet) and (output < 3):
+            print("### cut below here and paste into script ###")
+            print("set_view (\\")
+            print("  %14.9f, %14.9f, %14.9f,\\" % r[0:3])
+            print("  %14.9f, %14.9f, %14.9f,\\" % r[4:7])
+            print("  %14.9f, %14.9f, %14.9f,\\" % r[8:11])
+            print("  %14.9f, %14.9f, %14.9f,\\" % r[16:19])
+            print("  %14.9f, %14.9f, %14.9f,\\" % r[19:22])
+            print("  %14.9f, %14.9f, %14.9f )" % r[22:25])
+            print("### cut above here and paste into script ###")
+        if output == 3:
+            return ("set_view (\\\n" +
+                    "  %14.9f, %14.9f, %14.9f,\\\n" % r[0:3] +
+                    "  %14.9f, %14.9f, %14.9f,\\\n" % r[4:7] +
+                    "  %14.9f, %14.9f, %14.9f,\\\n" % r[8:11] +
+                    "  %14.9f, %14.9f, %14.9f,\\\n" % r[16:19] +
+                    "  %14.9f, %14.9f, %14.9f,\\\n" % r[19:22] +
+                    "  %14.9f, %14.9f, %14.9f )\n" % r[22:25])
+        r = r[0:3] + r[4:7] + r[8:11] + r[16:25]
         return r
 
     def set_view(view, animate=0, quiet=1, hand=1, *, _self=cmd):

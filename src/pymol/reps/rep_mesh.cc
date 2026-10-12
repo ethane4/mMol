@@ -367,21 +367,6 @@ static void RepMeshRenderRay(const RepMesh* I, CRay* ray, float line_width) {
   }
 }
 
-static void RepMeshPick(const RepMesh* I) { /* No-op; TODO? */ }
-
-static void RepMeshRenderImmediate(RepMesh* I, RenderInfo* info,
-                                   float line_width) {
-  auto G = I->G;
-  float* v = I->V.data();
-  float* vc = I->VC;
-  int* n = I->N.data();
-  if (I->shaderCGO) {
-    CGOFree(I->shaderCGO);
-    I->shaderCGO = nullptr;
-  }
-  /* Immediate mode rendering removed — use shader path */
-}
-
 void RepMeshRasterRender(RepMesh* I, RenderInfo* info) {
   auto G = I->G;
   bool ok = true;
@@ -428,7 +413,6 @@ void RepMeshRasterRender(RepMesh* I, RenderInfo* info) {
 void RepMesh::render(RenderInfo* info) {
   auto I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   float line_width = SceneGetDynamicLineWidth(info, I->Width);
 
   if (ray) {
@@ -438,17 +422,13 @@ void RepMesh::render(RenderInfo* info) {
   if (!(G->HaveGUI && G->ValidContext)) {
     return;
   }
-  if (pick) {
-    RepMeshPick(I);
-    return;
-  }
   bool use_shader = SettingGet<bool>(G, cSetting_mesh_use_shader) &  //
                     SettingGet<bool>(G, cSetting_use_shaders);
   if (use_shader) {
     RepMeshRasterRender(I, info);
     return;
   }
-  RepMeshRenderImmediate(I, info, line_width);
+  CGOFree(I->shaderCGO);
 }
 
 bool RepMesh::sameVis() const {

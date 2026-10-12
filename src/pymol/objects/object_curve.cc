@@ -216,13 +216,6 @@ void ObjectCurve::render(RenderInfo* info) {
       continue;
     }
     auto& stateObj = m_states[state];
-    if (info->pick) {
-      PickContext context{};
-      context.object = this;
-      auto cgo = stateObj.renderCGO.get();
-      CGORenderPicking(cgo, info, &context, Setting.get(), nullptr);
-      continue;
-    }
     if (pass != RenderPass::Antialias) {
       stateObj.updateRenderCGO();
       auto cgo = stateObj.renderCGO.get();

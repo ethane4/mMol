@@ -1033,18 +1033,8 @@ static ov_size idtf_dump_resources(char** vla, ov_size cnt,
 
         sprintf(buffer, "\t\t\tMODEL_NORMAL_COUNT %d\n", mesh->normal_count);
         UtilConcatVLA(vla, &cnt, buffer);
-#ifdef IDTF_COLOR
-        sprintf(buffer, "\t\t\tMODEL_DIFFUSE_COLOR_COUNT %d\n",
-                mesh->color_count);
-        UtilConcatVLA(vla, &cnt, buffer);
-
-        sprintf(buffer, "\t\t\tMODEL_SPECULAR_COLOR_COUNT %d\n",
-                mesh->color_count);
-        UtilConcatVLA(vla, &cnt, buffer);
-#else
         UtilConcatVLA(vla, &cnt, "\t\t\tMODEL_DIFFUSE_COLOR_COUNT 0\n");
         UtilConcatVLA(vla, &cnt, "\t\t\tMODEL_SPECULAR_COLOR_COUNT 0\n");
-#endif
         UtilConcatVLA(vla, &cnt, "\t\t\tMODEL_TEXTURE_COORD_COUNT 0\n");
         UtilConcatVLA(vla, &cnt, "\t\t\tMODEL_BONE_COUNT 0\n");
 
@@ -1112,33 +1102,6 @@ static ov_size idtf_dump_resources(char** vla, ov_size cnt,
           UtilConcatVLA(vla, &cnt, "\t\t\t}\n");
         }
 
-#ifdef IDTF_COLOR
-        {
-          int b;
-          int* ip = mesh->face_color_list;
-          UtilConcatVLA(vla, &cnt, "\t\t\tMESH_FACE_DIFFUSE_COLOR_LIST {\n");
-
-          for (b = 0; b < mesh->face_count; b++) {
-            sprintf(buffer, "\t\t\t%d %d %d\n", ip[0], ip[1], ip[2]);
-            UtilConcatVLA(vla, &cnt, buffer);
-            ip += 3;
-          }
-          UtilConcatVLA(vla, &cnt, "\t\t\t}\n");
-        }
-        {
-          int b;
-          int* ip = mesh->face_color_list;
-          UtilConcatVLA(vla, &cnt, "\t\t\tMESH_FACE_SPECULAR_COLOR_LIST {\n");
-
-          for (b = 0; b < mesh->face_count; b++) {
-            sprintf(buffer, "\t\t\t%d %d %d\n", ip[0], ip[1], ip[2]);
-            UtilConcatVLA(vla, &cnt, buffer);
-            ip += 3;
-          }
-          UtilConcatVLA(vla, &cnt, "\t\t\t}\n");
-        }
-#endif
-
         {
           int b;
           float* fp = mesh->model_position_list;
@@ -1166,36 +1129,6 @@ static ov_size idtf_dump_resources(char** vla, ov_size cnt,
 
           UtilConcatVLA(vla, &cnt, "\t\t\t}\n");
         }
-#ifdef IDTF_COLOR
-        {
-          int b;
-          float* fp = mesh->model_diffuse_color_list;
-          UtilConcatVLA(vla, &cnt, "\t\t\tMODEL_DIFFUSE_COLOR_LIST {\n");
-
-          for (b = 0; b < mesh->color_count; b++) {
-            sprintf(buffer, "\t\t\t\t%1.6f %1.6f %1.6f %1.6f\n", fp[0], fp[1],
-                    fp[2], fp[3]);
-            UtilConcatVLA(vla, &cnt, buffer);
-            fp += 4;
-          }
-
-          UtilConcatVLA(vla, &cnt, "\t\t\t}\n");
-        }
-        {
-          int b;
-          float* fp = mesh->model_diffuse_color_list;
-          UtilConcatVLA(vla, &cnt, "\t\t\tMODEL_SPECULAR_COLOR_LIST {\n");
-
-          for (b = 0; b < mesh->color_count; b++) {
-            sprintf(buffer, "\t\t\t\t%1.6f %1.6f %1.6f %1.6f\n", fp[0], fp[1],
-                    fp[2], fp[3]);
-            UtilConcatVLA(vla, &cnt, buffer);
-            fp += 4;
-          }
-
-          UtilConcatVLA(vla, &cnt, "\t\t\t}\n");
-        }
-#endif
 
         UtilConcatVLA(vla, &cnt, "\t\t}\n");
         UtilConcatVLA(vla, &cnt, "\t}\n");

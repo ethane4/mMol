@@ -230,6 +230,12 @@ struct PyMOLApp: App {
   }
 }
 
+/// `s` with every character but letters and digits replaced by "_", for
+/// object names and the PyMOL color names derived from them.
+func sanitizedName(_ s: String) -> String {
+  String(s.map { $0.isLetter || $0.isNumber ? $0 : "_" })
+}
+
 // Load a file the OS handed to mMol (Finder double-click / "Open With"). The OS
 // may deliver the URL before the engine has finished initializing (cold launch
 // from a file), so retry on the main queue until the engine is ready (capped so a
@@ -258,8 +264,7 @@ func loadOpenedFile(_ url: URL, into engine: PyMOLEngine, attempt: Int = 0) {
   } else {
     path = url.path  // fall back to the original path (e.g. local macOS file)
   }
-  let raw = url.deletingPathExtension().lastPathComponent
-  var name = String(raw.map { $0.isLetter || $0.isNumber ? $0 : "_" })
+  var name = sanitizedName(url.deletingPathExtension().lastPathComponent)
   if name.isEmpty { name = "mol" }
   engine.loadStructure(path: path, name: name)
   // Track an opened .pse as the current document so ⌘S overwrites it.

@@ -233,10 +233,9 @@ void ObjectDist::render(RenderInfo* info) {
   int state = info->state;
   const RenderPass pass = info->pass;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   bool shouldRender = false;
 
-  if (ray || pick) {
+  if (ray) {
     shouldRender = true;
   } else {
     shouldRender = pass != RenderPass::Antialias;

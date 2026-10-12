@@ -218,18 +218,11 @@ static void ObjectCGORenderState(PyMOLGlobals* G, RenderPass pass, CRay* ray,
       }
     }
   } else if (G->HaveGUI && G->ValidContext) {
-    if (info->pick) {
-      PickContext context;
-      context.object = I;
-      context.state = sobj - I->State.data();
-      CGORenderPicking(sobj->renderCGO.get(), info, &context, I->Setting.get(),
-                       nullptr);
-    } else if (pass != RenderPass::Antialias) {
+    if (pass != RenderPass::Antialias) {
       bool pass_is_opaque = pass == RenderPass::Opaque;
       if (sobj && ((sobj->hasTransparency ^ pass_is_opaque) ||
                    (sobj->hasOpaque == pass_is_opaque))) {
         {
-          CShaderPrg* shaderPrg;
           int two_sided_lighting = SettingGet_i(G, I->Setting.get(), nullptr,
                                                 cSetting_two_sided_lighting);
           bool backface_cull = SettingGet_i(G, I->Setting.get(), nullptr,
@@ -245,20 +238,11 @@ static void ObjectCGORenderState(PyMOLGlobals* G, RenderPass pass, CRay* ray,
           }
 
           if (use_shader) {
-            shaderPrg = G->ShaderMgr->Enable_DefaultShader(info->pass);
-            // The GL path needs the default shader; the Metal renderer has no
-            // GL shaders but dispatches CGO ops to its own pipelines.
-            if (!shaderPrg && !G->Renderer) return;
-            if (shaderPrg) {
-              shaderPrg->SetLightingEnabled(cgo_lighting);
-              shaderPrg->Set1i("two_sided_lighting_enabled",
-                               two_sided_lighting);
-            }
+            if (!G->Renderer) return;
             sobj->renderCGO->use_shader = use_shader;
             sobj->renderCGO->debug = SettingGetGlobal_i(G, cSetting_cgo_debug);
             CGORender(sobj->renderCGO.get(), color, I->Setting.get(), nullptr,
                       info, nullptr);
-            if (shaderPrg) shaderPrg->Disable();
           } else {
             sobj->renderCGO->use_shader = use_shader;
             sobj->renderCGO->debug = SettingGetGlobal_i(G, cSetting_cgo_debug);
@@ -336,13 +320,8 @@ static void ObjectCGOGenerateCGO(PyMOLGlobals* G, ObjectCGO* I,
 
       if (use_shader) {
         bool t_mode_3 = SettingGetGlobal_i(G, cSetting_transparency_mode) == 3;
-        if ((t_mode_3 || !hasTransparency) &&
-            (G->Renderer ||
-             (G->ShaderMgr->Get_DefaultSphereShader(RenderPass::Antialias) &&
-              G->ShaderMgr->Get_CylinderShader(RenderPass::Antialias)))) {
-          // On the Metal renderer the GL sphere/cylinder shaders are absent,
-          // but the Metal impostor + Bezier-tube paths handle these ops; keep
-          // the optimization so CGO spheres/cylinders/beziers still render.
+        // The Metal impostor + Bezier-tube paths handle these ops.
+        if ((t_mode_3 || !hasTransparency) && G->Renderer) {
           if (CGOHasCylinderOperations(convertcgo)) {
             allCylinders = CGONew(G);
             CGOEnable(allCylinders, GL_CYLINDER_SHADER);
@@ -465,7 +444,7 @@ void ObjectCGO::render(RenderInfo* info) {
 
   if (I->State.empty()) return;
 
-  if (pass != RenderPass::Antialias || info->ray || info->pick) {
+  if (pass != RenderPass::Antialias || info->ray) {
     if ((I->visRep & cRepCGOBit)) {
       for (StateIterator iter(G, I->Setting.get(), state, I->State.size());
            iter.next();) {

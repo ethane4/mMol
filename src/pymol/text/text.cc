@@ -60,7 +60,6 @@ struct CText {
   float LabelBuf[2];
 
   bool Flat = false;
-  bool IsPicking = false;
 
  private:
   std::vector<std::unique_ptr<CFont>> m_fonts;
@@ -101,16 +100,6 @@ void TextSetLabelBkgrdInfo(PyMOLGlobals* G, float label_spacing,
   } else {
     I->LabelBuf[0] = I->LabelBuf[1] = .2f;
   }
-}
-
-void TextSetIsPicking(PyMOLGlobals* G, bool IsPicking) {
-  CText* I = G->Text;
-  I->IsPicking = IsPicking;
-}
-
-bool TextGetIsPicking(PyMOLGlobals* G) {
-  CText* I = G->Text;
-  return I->IsPicking;
 }
 
 void TextSetPosNColor(PyMOLGlobals* G, const float* pos, const float* color) {

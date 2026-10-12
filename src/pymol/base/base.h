@@ -105,8 +105,6 @@ struct RenderInfo {
 
 #define PYMOL_MAX_THREADS 125
 
-#define _PYMOL_XRAY
-
 // no MMLIBS in open-source
 
 #endif

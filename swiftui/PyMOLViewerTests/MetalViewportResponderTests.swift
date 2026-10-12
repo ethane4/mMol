@@ -7,7 +7,7 @@ import XCTest
 /// first-responder so that clicks in the viewport do not steal focus from the
 /// command line.
 ///
-/// This matters for more than UX: the entire `installPyMOLKeyMonitor`
+/// This matters for more than UX: the entire `installKeyMonitor`
 /// architecture in ContentView (#258) exists *because* `acceptsFirstResponder`
 /// is false. If this property is ever flipped to `true`, the viewport would
 /// steal focus on click AND the key monitor would become redundant — but until
@@ -20,7 +20,7 @@ final class MetalViewportResponderTests: XCTestCase {
     // macOS. acceptsFirstResponder must remain false so that:
     //   1. Clicking the viewport does not steal focus from the command line
     //      (issue #73).
-    //   2. The app-level NSEvent monitor in ContentView (installPyMOLKeyMonitor,
+    //   2. The app-level NSEvent monitor in ContentView (installKeyMonitor,
     //      issue #258) remains the sole key-dispatch path and is not confused
     //      by a competing responder-chain path.
     let view = PyMOLMTKView(frame: .zero)

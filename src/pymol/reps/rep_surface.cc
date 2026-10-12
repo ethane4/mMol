@@ -123,6 +123,16 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
 
   bool pick_surface = SettingGet_b(G, cs->Setting.get(), obj->Setting.get(),
                                    cSetting_pick_surface);
+  // One triangle vertex: normal, accessibility, pick color, then position.
+  auto surfaceVertex = [&](int i) {
+    int r = CGONormalv(I->shaderCGO, vn + i * 3);
+    if (r && !I->VAO.empty()) r &= CGOAccessibility(I->shaderCGO, I->VAO[i]);
+    if (r && pick_surface)
+      r &=
+          CGOPickColor(I->shaderCGO, I->AT[i], AtomInfoIsMasked(obj, I->AT[i]));
+    if (r) r &= CGOVertexv(I->shaderCGO, v + i * 3);
+    return r;
+  };
   short dot_as_spheres = SettingGet_i(G, cs->Setting.get(), obj->Setting.get(),
                                       cSetting_dot_as_spheres);
   alpha = SettingGet_f(G, cs->Setting.get(), obj->Setting.get(),
@@ -689,33 +699,12 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
               c = *(s++);
               while (ok && c) {
                 if (ok) ok &= CGOBegin(I->shaderCGO, GL_TRIANGLE_STRIP);
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                     AtomInfoIsMasked(obj, I->AT[*s]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                if (ok) ok &= surfaceVertex(*s);
                 s++;
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                     AtomInfoIsMasked(obj, I->AT[*s]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                if (ok) ok &= surfaceVertex(*s);
                 s++;
                 while (ok && c--) {
-                  ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                  if (ok && !I->VAO.empty()) {
-                    ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                  }
-                  if (ok && pick_surface)
-                    ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                       AtomInfoIsMasked(obj, I->AT[*s]));
-                  if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                  if (ok) ok &= surfaceVertex(*s);
                   s++;
                 }
                 if (ok) ok &= CGOEnd(I->shaderCGO);
@@ -734,14 +723,7 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
                   if (ok) ok &= CGOAlpha(I->shaderCGO, alpha);
                   if (ok) ok &= CGOColor(I->shaderCGO, col[0], col[1], col[2]);
                 }
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                     AtomInfoIsMasked(obj, I->AT[*s]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                if (ok) ok &= surfaceVertex(*s);
                 s++;
                 col = vc + (*s) * 3;
                 if (va) {
@@ -751,14 +733,7 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
                   if (ok) ok &= CGOAlpha(I->shaderCGO, alpha);
                   if (ok) ok &= CGOColor(I->shaderCGO, col[0], col[1], col[2]);
                 }
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                     AtomInfoIsMasked(obj, I->AT[*s]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                if (ok) ok &= surfaceVertex(*s);
                 s++;
                 while (ok && c--) {
                   col = vc + (*s) * 3;
@@ -771,14 +746,7 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
                     if (ok)
                       ok &= CGOColor(I->shaderCGO, col[0], col[1], col[2]);
                   }
-                  if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                  if (ok && !I->VAO.empty()) {
-                    ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                  }
-                  if (ok && pick_surface)
-                    ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                       AtomInfoIsMasked(obj, I->AT[*s]));
-                  if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                  if (ok) ok &= surfaceVertex(*s);
                   s++;
                 }
                 if (ok) ok &= CGOEnd(I->shaderCGO);
@@ -797,32 +765,11 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
                   ok &= CGOColor(I->shaderCGO, color[0], color[1], color[2]);
                 while (ok && c--) {
                   if (visibility_test(I->proximity, vi, t)) {
-                    CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                    if (ok && !I->VAO.empty()) {
-                      ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                    }
-                    if (ok && pick_surface)
-                      ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                         AtomInfoIsMasked(obj, I->AT[*t]));
-                    if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                    if (ok) ok &= surfaceVertex(*t);
                     t++;
-                    if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                    if (ok && !I->VAO.empty()) {
-                      ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                    }
-                    if (ok && pick_surface)
-                      ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                         AtomInfoIsMasked(obj, I->AT[*t]));
-                    if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                    if (ok) ok &= surfaceVertex(*t);
                     t++;
-                    if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                    if (ok && !I->VAO.empty()) {
-                      ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                    }
-                    if (ok && pick_surface)
-                      ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                         AtomInfoIsMasked(obj, I->AT[*t]));
-                    if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                    if (ok) ok &= surfaceVertex(*t);
                     t++;
                   } else
                     t += 3;
@@ -838,14 +785,7 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
                       ok &= CGOAlpha(I->shaderCGO, alpha);
                     }
                     if (ok) ok &= CGOColorv(I->shaderCGO, col);
-                    if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                    if (ok && !I->VAO.empty()) {
-                      ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                    }
-                    if (ok && pick_surface)
-                      ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                         AtomInfoIsMasked(obj, I->AT[*t]));
-                    if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                    if (ok) ok &= surfaceVertex(*t);
                     t++;
                     col = vc + (*t) * 3;
                     if (va) {
@@ -854,14 +794,7 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
                       if (ok) ok &= CGOAlpha(I->shaderCGO, alpha);
                     }
                     if (ok) ok &= CGOColorv(I->shaderCGO, col);
-                    if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                    if (ok && !I->VAO.empty()) {
-                      ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                    }
-                    if (ok && pick_surface)
-                      ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                         AtomInfoIsMasked(obj, I->AT[*t]));
-                    if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                    if (ok) ok &= surfaceVertex(*t);
                     t++;
                     col = vc + (*t) * 3;
                     if (va) {
@@ -870,14 +803,7 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
                       if (ok) ok &= CGOAlpha(I->shaderCGO, alpha);
                     }
                     if (ok) ok &= CGOColorv(I->shaderCGO, col);
-                    if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                    if (ok && !I->VAO.empty()) {
-                      ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                    }
-                    if (ok && pick_surface)
-                      ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                         AtomInfoIsMasked(obj, I->AT[*t]));
-                    if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                    if (ok) ok &= surfaceVertex(*t);
                     t++;
                   } else
                     t += 3;
@@ -898,33 +824,12 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
             c = *(s++);
             while (ok && c) {
               if (ok) ok &= CGOBegin(I->shaderCGO, GL_TRIANGLE_STRIP);
-              if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-              if (ok && pick_surface)
-                ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                   AtomInfoIsMasked(obj, I->AT[*s]));
-              if (ok && !I->VAO.empty()) {
-                ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-              }
-              if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+              if (ok) ok &= surfaceVertex(*s);
               s++;
-              if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-              if (ok && pick_surface)
-                ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                   AtomInfoIsMasked(obj, I->AT[*s]));
-              if (ok && !I->VAO.empty()) {
-                ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-              }
-              if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+              if (ok) ok &= surfaceVertex(*s);
               s++;
               while (ok && c--) {
-                ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                     AtomInfoIsMasked(obj, I->AT[*s]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                if (ok) ok &= surfaceVertex(*s);
                 s++;
               }
               if (ok) ok &= CGOEnd(I->shaderCGO);
@@ -937,35 +842,14 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
             while (ok && c) {
               ok &= CGOBegin(I->shaderCGO, GL_TRIANGLE_STRIP);
               if (ok) ok &= CGOColorv(I->shaderCGO, vc + (*s) * 3);
-              if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-              if (ok && !I->VAO.empty()) {
-                ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-              }
-              if (ok && pick_surface)
-                ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                   AtomInfoIsMasked(obj, I->AT[*s]));
-              if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+              if (ok) ok &= surfaceVertex(*s);
               s++;
               if (ok) ok &= CGOColorv(I->shaderCGO, vc + (*s) * 3);
-              if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-              if (ok && !I->VAO.empty()) {
-                ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-              }
-              if (ok && pick_surface)
-                ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                   AtomInfoIsMasked(obj, I->AT[*s]));
-              if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+              if (ok) ok &= surfaceVertex(*s);
               s++;
               while (ok && c--) {
                 ok &= CGOColorv(I->shaderCGO, vc + (*s) * 3);
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*s) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*s]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*s],
-                                     AtomInfoIsMasked(obj, I->AT[*s]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*s) * 3);
+                if (ok) ok &= surfaceVertex(*s);
                 s++;
               }
               if (ok) ok &= CGOEnd(I->shaderCGO);
@@ -981,32 +865,11 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
             if (ok) ok &= CGOColorv(I->shaderCGO, ColorGet(G, I->oneColor));
             while (ok && c--) {
               if (visibility_test(I->proximity, vi, t)) {
-                ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                     AtomInfoIsMasked(obj, I->AT[*t]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                if (ok) ok &= surfaceVertex(*t);
                 t++;
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                     AtomInfoIsMasked(obj, I->AT[*t]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                if (ok) ok &= surfaceVertex(*t);
                 t++;
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                     AtomInfoIsMasked(obj, I->AT[*t]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                if (ok) ok &= surfaceVertex(*t);
                 t++;
               } else
                 t += 3;
@@ -1015,34 +878,13 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
             while (ok && c--) {
               if (visibility_test(I->proximity, vi, t)) {
                 ok &= CGOColorv(I->shaderCGO, vc + (*t) * 3);
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                     AtomInfoIsMasked(obj, I->AT[*t]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                if (ok) ok &= surfaceVertex(*t);
                 t++;
                 if (ok) ok &= CGOColorv(I->shaderCGO, vc + (*t) * 3);
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                     AtomInfoIsMasked(obj, I->AT[*t]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                if (ok) ok &= surfaceVertex(*t);
                 t++;
                 if (ok) ok &= CGOColorv(I->shaderCGO, vc + (*t) * 3);
-                if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-                if (ok && !I->VAO.empty()) {
-                  ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-                }
-                if (ok && pick_surface)
-                  ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                                     AtomInfoIsMasked(obj, I->AT[*t]));
-                if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+                if (ok) ok &= surfaceVertex(*t);
                 t++;
               } else
                 t += 3;
@@ -1063,32 +905,11 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
       ok &= CGOBegin(I->shaderCGO, GL_TRIANGLES);
       while (ok && c--) {
         if (I->allVisibleFlag || visibility_test(I->proximity, vi, t)) {
-          ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-          if (ok && !I->VAO.empty()) {
-            ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-          }
-          if (ok && pick_surface)
-            ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                               AtomInfoIsMasked(obj, I->AT[*t]));
-          if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+          if (ok) ok &= surfaceVertex(*t);
           t++;
-          if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-          if (ok && !I->VAO.empty()) {
-            ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-          }
-          if (ok && pick_surface)
-            ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                               AtomInfoIsMasked(obj, I->AT[*t]));
-          if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+          if (ok) ok &= surfaceVertex(*t);
           t++;
-          if (ok) ok &= CGONormalv(I->shaderCGO, vn + (*t) * 3);
-          if (ok && !I->VAO.empty()) {
-            ok &= CGOAccessibility(I->shaderCGO, I->VAO[*t]);
-          }
-          if (ok && pick_surface)
-            ok &= CGOPickColor(I->shaderCGO, I->AT[*t],
-                               AtomInfoIsMasked(obj, I->AT[*t]));
-          if (ok) ok &= CGOVertexv(I->shaderCGO, v + (*t) * 3);
+          if (ok) ok &= surfaceVertex(*t);
           t++;
         } else {
           t += 3;
@@ -1243,7 +1064,6 @@ static int RepSurfaceCGOGenerate(RepSurface* I, RenderInfo* info) {
 void RepSurface::render(RenderInfo* info) {
   auto* I = this;
   CRay* ray = info->ray;
-  auto pick = info->pick;
   float* v = I->V.data();
   float* vn = I->VN.data();
   float* vc = I->VC.data();
@@ -1489,37 +1309,27 @@ void RepSurface::render(RenderInfo* info) {
     }
   } else if (G->HaveGUI && G->ValidContext) {
     /* Not ray tracing, but rendering */
-    if (pick) {
-      // Don't render transparent unpickable surfaces. Do render solid but
-      // unpickable surfaces to write the depth buffer and prevent
-      // through-picking.
-      if (I->pickingCGO && !(I->pickingCGO->no_pick && alpha < 1.F)) {
-        CGORenderPicking(I->pickingCGO, info, &I->context, cs->Setting.get(),
-                         obj->Setting.get());
-      }
-    } else {
-      {
-        bool dot_as_spheres = SettingGet_b(
-            G, cs->Setting.get(), obj->Setting.get(), cSetting_dot_as_spheres);
+    {
+      bool dot_as_spheres = SettingGet_b(
+          G, cs->Setting.get(), obj->Setting.get(), cSetting_dot_as_spheres);
 
-        if (!I->shaderCGO || CGOCheckWhetherToFree(G, I->shaderCGO) ||
-            (I->Type == SurfaceType::DotDefault &&
-             I->dot_as_spheres != dot_as_spheres)) {
-          ok &= RepSurfaceCGOGenerate(I, info);
-        }
-
-        if (ok && I->shaderCGO) {
-          const float* color = ColorGet(G, obj->Color);
-          CGORender(I->shaderCGO, color, nullptr, nullptr, info, I);
-          return;
-        }
-
-        PRINTFB(G, FB_RepSurface, FB_Errors)
-        " RepSurfaceCGOGenerate failed\n" ENDFB(G);
+      if (!I->shaderCGO || CGOCheckWhetherToFree(G, I->shaderCGO) ||
+          (I->Type == SurfaceType::DotDefault &&
+           I->dot_as_spheres != dot_as_spheres)) {
+        ok &= RepSurfaceCGOGenerate(I, info);
       }
 
-      setShaderCGO(I, nullptr);
+      if (ok && I->shaderCGO) {
+        const float* color = ColorGet(G, obj->Color);
+        CGORender(I->shaderCGO, color, nullptr, nullptr, info, I);
+        return;
+      }
+
+      PRINTFB(G, FB_RepSurface, FB_Errors)
+      " RepSurfaceCGOGenerate failed\n" ENDFB(G);
     }
+
+    setShaderCGO(I, nullptr);
   }
   if (!ok) {
     I->invalidate(cRepInvPurge);

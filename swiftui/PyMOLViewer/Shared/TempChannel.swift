@@ -25,6 +25,8 @@ enum TempChannel {
     static let rayOverlay = "_pymol_ray_overlay"
     static let objectPanel = "pymol_objpanel"
     static let objectDetail = "pymol_objdetail"
+    static let longPress = "pymol_longpress"
+    static let renderOptions = "mmol_render_options"
 
     /// Every channel, for `removeAll()`. `.png` channels are listed with
     /// their extension; the rest are JSON.
@@ -32,6 +34,7 @@ enum TempChannel {
       (sequence, "json"), (sequenceSelection, "json"), (gizmo, "json"),
       (settings, "json"), (rayOverlay, "png"),
       (objectPanel, "json"), (objectDetail, "json"),
+      (longPress, "json"), (renderOptions, "json"),
     ]
   }
 

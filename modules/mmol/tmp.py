@@ -15,6 +15,7 @@ passed to `channel_path` must have a twin in `TempChannel.Stem` on the Swift
 side, which is both the reader and the list `TempChannel.removeAll()` clears on
 quit.
 """
+import json
 import os
 import tempfile
 
@@ -23,3 +24,13 @@ def channel_path(stem, ext='json'):
     """Return `<tmpdir>/<stem>_<pid>.<ext>` for this process."""
     return os.path.join(tempfile.gettempdir(),
                         '%s_%d.%s' % (stem, os.getpid(), ext))
+
+
+def write_json(stem, obj):
+    """Write `obj` as JSON to `channel_path(stem)`.
+
+    Serialises before opening: open(..., 'w') truncates immediately, so a value
+    that is not JSON-serialisable would otherwise leave a zero-byte file behind."""
+    blob = json.dumps(obj)
+    with open(channel_path(stem), 'w') as f:
+        f.write(blob)

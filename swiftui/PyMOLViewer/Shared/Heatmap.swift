@@ -228,7 +228,7 @@ extension PyMOLEngine {
       let t = span > 0 ? min(1, max(0, (rv.value - s.minValue) / span)) : 0.5
       buckets[Int((t * Double(steps - 1)).rounded()), default: []].append((rv.chain, rv.resi))
     }
-    let tag = String(object.map { $0.isLetter || $0.isNumber ? $0 : "_" })
+    let tag = sanitizedName(object)
     let obj = object.replacingOccurrences(of: "'", with: "")
     var py = "from pymol import cmd as _c\n"
     py += "_c.color('gray70', \"(\(obj)) and polymer\", quiet=1)\n"
